@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "beambench",
+  "project_id": "27db81b0-d912-4269-8e47-91a4b423e293"
+}
