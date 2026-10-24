@@ -89,7 +89,7 @@
     gap: 14px;
     padding: 14px;
   }
-  .stage, .chat {
+  .stage, .side {
     min-height: 0;
     background: var(--paper);
     border: 3px solid var(--line);
@@ -126,32 +126,20 @@
     font-size: 18px;
   }
 
-  .dash {
+  .stage-printer {
     position: absolute;
-    z-index: 3;
-    top: 12px; left: 12px;
-    width: 292px;
-    max-height: calc(100% - 78px);
-    background: var(--ink);
-    border-radius: 26px;
-    padding: 8px;
-    box-shadow: 6px 8px 0 rgba(28, 36, 48, 0.28);
-  }
-  .dash-toggle {
-    display: none;
+    z-index: 2;
+    top: 12px;
+    left: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     border: 2px solid var(--line);
     background: var(--cream);
     border-radius: 999px;
-    padding: 6px 12px;
+    padding: 4px 12px 4px 4px;
     font-weight: 800;
     box-shadow: 2px 2px 0 var(--line);
-  }
-  .dash-screen {
-    background: var(--cream);
-    border-radius: 18px;
-    padding: 12px;
-    max-height: calc(100dvh - 160px);
-    overflow: auto;
   }
   .dash-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .state {
@@ -190,7 +178,7 @@
   .left, .dash-note { font-weight: 700; color: #5c5148; }
   .cam-wrap { margin-top: 8px; }
   #cam {
-    width: 100%; height: 120px; object-fit: cover; background: #111;
+    width: 100%; height: 180px; object-fit: cover; background: #111;
     border-radius: 12px; border: 2px solid var(--line);
   }
   #camNote { margin: 0; font-size: 12px; font-weight: 800; color: #6d6256; }
@@ -201,10 +189,34 @@
   #cancelBtn { background: white; }
   .wide { width: 100%; margin-top: 6px; }
   #simulateBtn { background: var(--sky); }
+  .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .settings label { display: block; font-size: 12px; font-weight: 800; }
+  .set-row { display: flex; gap: 6px; margin-top: 4px; }
+  .set-row input {
+    width: 100%; min-height: 0; padding: 8px 10px;
+    border: 2px solid var(--line); border-radius: 12px; background: white;
+  }
+  .set-row button { flex: none; background: var(--gold); }
+  .settings-note { margin: 8px 0 0; font-size: 12px; font-weight: 700; color: #5c5148; }
 
-  .chat { display: flex; flex-direction: column; background: var(--cream); }
+  .side { display: flex; flex-direction: column; background: var(--cream); }
+  .tabs { display: flex; gap: 6px; }
+  .tabs button {
+    border: 2px solid var(--line);
+    background: white;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-family: Fredoka, Nunito, sans-serif;
+    font-weight: 700;
+    box-shadow: 2px 2px 0 var(--line);
+  }
+  .tabs button[aria-selected="true"] { background: var(--gold); }
+  #chatPane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  #printerPane { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px 16px; }
+  #chatPane[hidden], #printerPane[hidden], .picks[hidden] { display: none; }
   .chat-bar {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    flex-wrap: wrap;
     padding: 10px 12px;
     border-bottom: 3px solid var(--line);
   }
@@ -299,10 +311,6 @@
 
   @media (max-width: 860px) {
     .bench { grid-template-columns: 1fr; grid-template-rows: minmax(220px, 38vh) minmax(0, 1fr); padding: 8px; gap: 8px; }
-    .dash { width: auto; right: 12px; }
-    .dash-toggle { display: inline-flex; }
-    .dash:not(.open) { background: transparent; padding: 0; box-shadow: none; width: auto; right: auto; }
-    .dash:not(.open) .dash-screen { display: none; }
     .orbit-hint { display: none; }
     .empty .hero { width: 64px; height: 74px; }
     .empty p { display: none; }
@@ -338,6 +346,10 @@
 <div class="bench">
   <section class="stage" aria-label="Prepare view">
     <div id="viewport">
+      <button type="button" class="stage-printer" id="stagePrinter">
+        <span class="state" id="stageState" data-kind="idle">—</span>
+        <span>Printer</span>
+      </button>
       <div class="view-presets" role="group" aria-label="Camera">
         <button type="button" data-view="front">Front</button>
         <button type="button" data-view="top">Top</button>
@@ -352,57 +364,15 @@
         <button type="button" class="slice" id="sliceBtn">Slice</button>
       </div>
     </div>
-    <aside class="dash" id="dash">
-      <button type="button" class="dash-toggle ctrl" id="dashToggle">Printer</button>
-      <div class="dash-screen">
-        <div class="dash-top">
-          <span class="state" id="pState" data-kind="idle">—</span>
-          <span class="source" id="pSource">—</span>
-        </div>
-        <div class="ring-wrap">
-          <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
-            <circle class="track" cx="60" cy="60" r="52"/>
-            <circle class="arc" id="pArc" cx="60" cy="60" r="52" transform="rotate(-90 60 60)"/>
-          </svg>
-          <div class="ring-label">
-            <strong id="pProgress">—</strong>
-            <span>job</span>
-          </div>
-        </div>
-        <div class="temps">
-          <div class="temp">
-            <span>Nozzle</span>
-            <strong id="pHot">—</strong>
-            <span id="pHotTarget"></span>
-          </div>
-          <div class="temp">
-            <span>Bed</span>
-            <strong id="pBed">—</strong>
-            <span id="pBedTarget"></span>
-          </div>
-        </div>
-        <p class="job" id="pJob">No file selected</p>
-        <p class="left" id="pLeft"></p>
-        <div class="cam-wrap">
-          <img id="cam" alt="Printer camera" hidden />
-          <p id="camNote" hidden></p>
-        </div>
-        <p class="dash-note" id="dashNote" role="status"></p>
-        <div class="ctrls">
-          <button type="button" id="startBtn">Start</button>
-          <button type="button" id="pauseBtn">Pause</button>
-          <button type="button" id="cancelBtn">Cancel</button>
-        </div>
-        <button type="button" class="ghost wide" id="uploadBtn">Upload gcode</button>
-        <button type="button" class="ghost wide" id="simulateBtn" hidden>Play a simulated job</button>
-      </div>
-    </aside>
   </section>
 
-  <section class="chat" aria-label="Chat">
+  <section class="side" aria-label="Chat and printer">
     <div class="chat-bar">
-      <h2>Chat</h2>
-      <div class="picks">
+      <div class="tabs" role="tablist" aria-label="Panel">
+        <button type="button" role="tab" id="tabChat" aria-selected="true" aria-controls="chatPane">Chat</button>
+        <button type="button" role="tab" id="tabPrinter" aria-selected="false" aria-controls="printerPane">Printer</button>
+      </div>
+      <div class="picks" id="modelPicks">
         <label>Model
           <select id="model" aria-label="Model">
             <option value="">Workshop model</option>
@@ -418,11 +388,12 @@
         </label>
       </div>
     </div>
+    <div id="chatPane" role="tabpanel" aria-labelledby="tabChat">
     <div class="thread" id="thread">
       <div class="empty" id="empty">
         <svg class="hero" viewBox="0 0 64 74"><use href="#pocket"/></svg>
         <h3>hey, what are we printing?</h3>
-        <p>One part. Ask for a change, and the rest stays. Start and cancel live on the printer card, and they ask first.</p>
+        <p>One part. Ask for a change, and the rest stays. Temperatures, speed, and the job live on the Printer tab. Start and cancel ask first.</p>
         <div class="chips">
           <button type="button" class="chip" data-suggest="A bracket, 40 mm wide, two holes 30 mm apart.">40 mm bracket</button>
           <button type="button" class="chip" data-suggest="How is the printer right now?">Check the printer</button>
@@ -445,6 +416,76 @@
       <div class="notes" id="fitList"></div>
       <div class="notes" id="revList"></div>
     </details>
+    </div>
+    <div id="printerPane" role="tabpanel" aria-labelledby="tabPrinter" hidden>
+      <div class="dash-top">
+        <span class="state" id="pState" data-kind="idle">—</span>
+        <span class="source" id="pSource">—</span>
+      </div>
+      <div class="ring-wrap">
+        <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="track" cx="60" cy="60" r="52"/>
+          <circle class="arc" id="pArc" cx="60" cy="60" r="52" transform="rotate(-90 60 60)"/>
+        </svg>
+        <div class="ring-label">
+          <strong id="pProgress">—</strong>
+          <span>job</span>
+        </div>
+      </div>
+      <div class="temps">
+        <div class="temp">
+          <span>Nozzle</span>
+          <strong id="pHot">—</strong>
+          <span id="pHotTarget"></span>
+        </div>
+        <div class="temp">
+          <span>Bed</span>
+          <strong id="pBed">—</strong>
+          <span id="pBedTarget"></span>
+        </div>
+      </div>
+      <p class="job" id="pJob">No file selected</p>
+      <p class="left" id="pLeft"></p>
+      <div class="cam-wrap">
+        <img id="cam" alt="Printer camera" hidden />
+        <p id="camNote" hidden></p>
+      </div>
+      <div class="settings">
+        <label>Nozzle target °C
+          <span class="set-row">
+            <input id="toolTarget" type="number" min="0" max="280" step="1" inputmode="numeric" />
+            <button type="button" class="ghost" id="toolBtn">Set</button>
+          </span>
+        </label>
+        <label>Bed target °C
+          <span class="set-row">
+            <input id="bedTarget" type="number" min="0" max="120" step="1" inputmode="numeric" />
+            <button type="button" class="ghost" id="bedBtn">Set</button>
+          </span>
+        </label>
+        <label>Speed %
+          <span class="set-row">
+            <input id="feedTarget" type="number" min="10" max="200" step="1" inputmode="numeric" placeholder="100" />
+            <button type="button" class="ghost" id="feedBtn">Set</button>
+          </span>
+        </label>
+        <label>Flow %
+          <span class="set-row">
+            <input id="flowTarget" type="number" min="10" max="200" step="1" inputmode="numeric" placeholder="100" />
+            <button type="button" class="ghost" id="flowBtn">Set</button>
+          </span>
+        </label>
+      </div>
+      <p class="settings-note">0 turns a heater off. Speed and flow stay between 10 and 200, and they have no live readout. These controls do nothing while the printer is simulated.</p>
+      <p class="dash-note" id="dashNote" role="status"></p>
+      <div class="ctrls">
+        <button type="button" id="startBtn">Start</button>
+        <button type="button" id="pauseBtn">Pause</button>
+        <button type="button" id="cancelBtn">Cancel</button>
+      </div>
+      <button type="button" class="ghost wide" id="uploadBtn">Upload gcode</button>
+      <button type="button" class="ghost wide" id="simulateBtn" hidden>Play a simulated job</button>
+    </div>
   </section>
 </div>
 
@@ -499,34 +540,71 @@ function tempReadout(block, flat) {
   return { actual: only + '°', target: 'simulated' };
 }
 
-let camState = 'unknown';
 const cam = document.getElementById('cam');
 const camNote = document.getElementById('camNote');
+let camBusy = false;
+let camUrl = '';
 cam.addEventListener('error', () => {
-  camState = 'off';
   cam.hidden = true;
-  cam.removeAttribute('src');
   camNote.hidden = false;
-  camNote.textContent = 'Camera unavailable.';
-});
-cam.addEventListener('load', () => {
-  camState = 'on';
-  cam.hidden = false;
-  camNote.hidden = true;
+  camNote.textContent = 'Snapshot unavailable.';
 });
 
-function refreshCamera(simulated) {
-  if (simulated) {
-    camState = 'sim';
+async function refreshCamera() {
+  if (camBusy) return;
+  camBusy = true;
+  try {
+    const res = await fetch('/api/camera?t=' + Date.now(), { cache: 'no-store' });
+    const type = (res.headers.get('content-type') || '').toLowerCase();
+    if (!res.ok || (type.indexOf('image/jpeg') === -1 && type.indexOf('image/jpg') === -1)) {
+      throw new Error('unavailable');
+    }
+    const blob = await res.blob();
+    if (camUrl) URL.revokeObjectURL(camUrl);
+    camUrl = URL.createObjectURL(blob);
+    cam.src = camUrl;
+    cam.hidden = false;
+    camNote.hidden = true;
+  } catch (err) {
     cam.hidden = true;
+    if (camUrl) {
+      URL.revokeObjectURL(camUrl);
+      camUrl = '';
+    }
     cam.removeAttribute('src');
     camNote.hidden = false;
-    camNote.textContent = 'Simulated printer. No camera.';
-    return;
+    camNote.textContent = 'Snapshot unavailable.';
+  } finally {
+    camBusy = false;
   }
-  if (camState === 'sim') camState = 'unknown';
-  if (camState === 'off') return;
-  cam.src = '/api/camera?t=' + Date.now();
+}
+
+function showPane(name) {
+  const printer = name === 'printer';
+  document.getElementById('chatPane').hidden = printer;
+  document.getElementById('printerPane').hidden = !printer;
+  document.getElementById('tabChat').setAttribute('aria-selected', printer ? 'false' : 'true');
+  document.getElementById('tabPrinter').setAttribute('aria-selected', printer ? 'true' : 'false');
+  document.getElementById('modelPicks').hidden = printer;
+  try { sessionStorage.setItem('caliclaw-pane', printer ? 'printer' : 'chat'); } catch (err) { /* private mode */ }
+}
+
+function paintState(el, state, kind) {
+  el.textContent = state;
+  el.dataset.kind = kind;
+}
+
+function fillIfClean(id, value) {
+  const el = document.getElementById(id);
+  if (!el || document.activeElement === el || el.dataset.dirty === '1') return;
+  if (value == null || value === '') return;
+  el.value = String(value);
+}
+
+function targetNumber(block, flat) {
+  if (block && block.target != null && Number.isFinite(Number(block.target))) return Math.round(Number(block.target));
+  if (flat != null && Number.isFinite(Number(flat))) return Math.round(Number(flat));
+  return null;
 }
 
 let resumeMode = false;
@@ -536,13 +614,12 @@ async function pollPrinter() {
     const data = await res.json();
     const simulated = Boolean(data.simulated) || String(data.source || '').indexOf('simulated') === 0;
     const state = data.state || '—';
-    const stateEl = document.getElementById('pState');
-    stateEl.textContent = state;
     const kind = /print/i.test(state) ? 'printing' : /pause/i.test(state) ? 'paused' : /error|disconnect|stale/i.test(state) ? 'bad' : 'idle';
-    stateEl.dataset.kind = kind;
+    paintState(document.getElementById('pState'), state, kind);
+    paintState(document.getElementById('stageState'), state, kind);
     const sourceEl = document.getElementById('pSource');
     sourceEl.textContent = simulated ? 'Simulated' : 'OctoPrint';
-    sourceEl.title = simulated ? 'OctoPrint did not answer. This card is not the machine.' : 'Live OctoPrint';
+    sourceEl.title = simulated ? 'OctoPrint did not answer. This panel is not the machine.' : 'Live OctoPrint';
 
     let frac = null;
     if (data.progress != null && Number.isFinite(Number(data.progress))) {
@@ -559,6 +636,10 @@ async function pollPrinter() {
     document.getElementById('pHotTarget').textContent = hot.target;
     document.getElementById('pBed').textContent = bed.actual;
     document.getElementById('pBedTarget').textContent = bed.target;
+    fillIfClean('toolTarget', targetNumber(data.hotend, data.temperature));
+    fillIfClean('bedTarget', targetNumber(data.bed, data.bed_temperature));
+    fillIfClean('feedTarget', document.getElementById('feedTarget').value ? null : 100);
+    fillIfClean('flowTarget', document.getElementById('flowTarget').value ? null : 100);
     document.getElementById('pJob').textContent = data.job || 'No file selected';
     const bits = [];
     if (data.print_time != null) bits.push(fmtDuration(data.print_time) + ' in');
@@ -569,14 +650,13 @@ async function pollPrinter() {
     const pauseBtn = document.getElementById('pauseBtn');
     pauseBtn.textContent = resumeMode ? 'Resume' : 'Pause';
     pauseBtn.classList.toggle('resume', resumeMode);
-    for (const id of ['startBtn', 'pauseBtn', 'cancelBtn', 'uploadBtn']) {
-      const button = document.getElementById(id);
-      button.disabled = simulated;
-      button.title = simulated ? 'Simulated printer. This does not move the machine.' : '';
+    for (const id of ['startBtn', 'pauseBtn', 'cancelBtn', 'uploadBtn', 'toolTarget', 'toolBtn', 'bedTarget', 'bedBtn', 'feedTarget', 'feedBtn', 'flowTarget', 'flowBtn']) {
+      const control = document.getElementById(id);
+      control.disabled = simulated;
+      control.title = simulated ? 'Simulated printer. This does not move the machine.' : '';
     }
     document.getElementById('simulateBtn').hidden = !simulated;
-    document.getElementById('dashToggle').textContent = 'Printer · ' + state;
-    refreshCamera(simulated);
+    refreshCamera();
   } catch (err) {
     console.error(err);
   }
@@ -584,8 +664,83 @@ async function pollPrinter() {
 pollPrinter();
 setInterval(pollPrinter, 3000);
 
-document.getElementById('dashToggle').onclick = () => {
-  document.getElementById('dash').classList.toggle('open');
+document.getElementById('tabChat').onclick = () => showPane('chat');
+document.getElementById('tabPrinter').onclick = () => showPane('printer');
+document.getElementById('stagePrinter').onclick = () => showPane('printer');
+try {
+  if (sessionStorage.getItem('caliclaw-pane') === 'printer') showPane('printer');
+} catch (err) { /* keep chat */ }
+
+['toolTarget', 'bedTarget', 'feedTarget', 'flowTarget'].forEach((id) => {
+  document.getElementById(id).addEventListener('input', (event) => {
+    event.target.dataset.dirty = '1';
+  });
+});
+
+function note(text) {
+  document.getElementById('dashNote').textContent = text;
+}
+
+async function postSetting(url, body, inputId, okText) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    note(safeDetail(data, 'The printer did not accept that.'));
+    return;
+  }
+  const field = document.getElementById(inputId);
+  if (field) field.dataset.dirty = '';
+  note(okText);
+  pollPrinter();
+}
+
+function readTemp(id, label, hi) {
+  const raw = document.getElementById(id).value.trim();
+  const value = Number(raw);
+  if (raw === '' || !Number.isFinite(value) || value < 0 || value > hi) {
+    note(label + ' must be between 0 and ' + hi + '.');
+    return null;
+  }
+  return value;
+}
+
+function readFactor(id, label) {
+  const raw = document.getElementById(id).value.trim();
+  if (!/^\d+$/.test(raw)) {
+    note(label + ' must be a whole number from 10 to 200.');
+    return null;
+  }
+  const value = Number(raw);
+  if (value < 10 || value > 200) {
+    note(label + ' must be a whole number from 10 to 200.');
+    return null;
+  }
+  return value;
+}
+
+document.getElementById('toolBtn').onclick = () => {
+  const value = readTemp('toolTarget', 'Nozzle', 280);
+  if (value == null) return;
+  postSetting('/api/printer/targets', { tool: value }, 'toolTarget', 'Nozzle target sent.');
+};
+document.getElementById('bedBtn').onclick = () => {
+  const value = readTemp('bedTarget', 'Bed', 120);
+  if (value == null) return;
+  postSetting('/api/printer/targets', { bed: value }, 'bedTarget', 'Bed target sent.');
+};
+document.getElementById('feedBtn').onclick = () => {
+  const value = readFactor('feedTarget', 'Speed');
+  if (value == null) return;
+  postSetting('/api/printer/factors', { feedrate: value }, 'feedTarget', 'Speed sent.');
+};
+document.getElementById('flowBtn').onclick = () => {
+  const value = readFactor('flowTarget', 'Flow');
+  if (value == null) return;
+  postSetting('/api/printer/factors', { flowrate: value }, 'flowTarget', 'Flow sent.');
 };
 
 async function postControl(url, body) {
@@ -863,7 +1018,7 @@ async function bootViewer() {
     console.error(err);
     const note = document.createElement('div');
     note.className = 'viewer-fallback';
-    note.textContent = '3D view did not load. Chat and the printer card still work.';
+    note.textContent = '3D view did not load. Chat and the printer tab still work.';
     viewport.appendChild(note);
     return;
   }

@@ -14,7 +14,16 @@ from pydantic import BaseModel
 from .collector import SimulatedPrinterState
 from .db import init_db
 from .fit import fit_memory_text, project_snapshot, record_fit
-from .octoprint import camera_snapshot, control_job, get_job, get_printer, upload_file
+from .octoprint import (
+    camera_snapshot,
+    control_job,
+    get_job,
+    get_printer,
+    set_bed_target,
+    set_printhead_factor,
+    set_tool_target,
+    upload_file,
+)
 import sqlite3
 import uuid
 
@@ -299,6 +308,70 @@ def printer_resume():
         return control_job("resume")
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+TOOL_RANGE = (0, 280)
+BED_RANGE = (0, 120)
+FACTOR_RANGE = (10, 200)
+
+
+class TargetsRequest(BaseModel):
+    tool: float | None = None
+    bed: float | None = None
+
+
+class FactorsRequest(BaseModel):
+    feedrate: int | None = None
+    flowrate: int | None = None
+
+
+def _in_range(name: str, value: float, lo: float, hi: float) -> None:
+    if value < lo or value > hi:
+        raise HTTPException(status_code=400, detail=f"{name} must be between {lo} and {hi}")
+
+
+def _refuse_simulated() -> None:
+    status = _real_printer_status()
+    if status.get("simulated"):
+        raise HTTPException(status_code=400, detail="simulated printer cannot change live settings")
+
+
+@router.post("/printer/targets")
+def printer_targets(req: TargetsRequest):
+    if req.tool is None and req.bed is None:
+        raise HTTPException(status_code=400, detail="set a nozzle or bed target")
+    if req.tool is not None:
+        _in_range("nozzle", req.tool, *TOOL_RANGE)
+    if req.bed is not None:
+        _in_range("bed", req.bed, *BED_RANGE)
+    _refuse_simulated()
+    try:
+        if req.tool is not None:
+            set_tool_target(req.tool)
+        if req.bed is not None:
+            set_bed_target(req.bed)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="printer settings were not accepted") from exc
+    return {"ok": True}
+
+
+@router.post("/printer/factors")
+def printer_factors(req: FactorsRequest):
+    if req.feedrate is None and req.flowrate is None:
+        raise HTTPException(status_code=400, detail="set a speed or flow")
+    if req.feedrate is not None:
+        _in_range("speed", req.feedrate, *FACTOR_RANGE)
+    if req.flowrate is not None:
+        _in_range("flow", req.flowrate, *FACTOR_RANGE)
+    _refuse_simulated()
+    try:
+        if req.feedrate is not None:
+            set_printhead_factor("feedrate", req.feedrate)
+        if req.flowrate is not None:
+            set_printhead_factor("flowrate", req.flowrate)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="printer settings were not accepted") from exc
+    return {"ok": True}
 
 
 @router.post("/printer/cancel")

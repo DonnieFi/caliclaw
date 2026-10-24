@@ -106,6 +106,31 @@ def restart_job() -> dict[str, Any]:
     return _post_job({"command": "restart"})
 
 
+def _post_json(path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    r = httpx.post(base_url() + path, headers=_headers(), json=payload, timeout=10)
+    r.raise_for_status()
+    if not r.content:
+        return {}
+    try:
+        return r.json()
+    except Exception:
+        return {}
+
+
+def set_tool_target(celsius: float) -> dict[str, Any]:
+    return _post_json("/api/printer/tool", {"command": "target", "targets": {"tool0": celsius}})
+
+
+def set_bed_target(celsius: float) -> dict[str, Any]:
+    return _post_json("/api/printer/bed", {"command": "target", "target": celsius})
+
+
+def set_printhead_factor(command: str, factor: int) -> dict[str, Any]:
+    if command not in ("feedrate", "flowrate"):
+        raise ValueError("unknown printhead command")
+    return _post_json("/api/printer/printhead", {"command": command, "factor": int(factor)})
+
+
 def control_job(command: str) -> dict[str, Any]:
     if command == "start":
         return start_job()
