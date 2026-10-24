@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>CaliClaw — printer workbench</title>
+<title>CaliClaw</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23e23d32'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@560;700&family=Nunito:wght@560;700;800&display=swap" rel="stylesheet" />
 <script type="importmap">
 {
   "imports": {
@@ -14,249 +18,508 @@
 </script>
 <style>
   :root {
-    --bg:#e8e2d6; --panel:#f6f3ec; --inset:#fbf9f5; --viewer:#ddd6c8;
-    --grid:#c4bcae; --plate:#cfc6b6; --filament:#8d8274;
-    --ink:#1b1916; --muted:#5e584e; --rule:#d4cec2;
-    --claw:#9d2c22; --on-solid:#f6f3ec; --user:#efe8dc; --active:#e7e0d2;
+    --ink: #1c2430;
+    --cream: #fff6ea;
+    --paper: #fffaf3;
+    --claw: #e23d32;
+    --claw-deep: #b42318;
+    --denim: #2c4a78;
+    --denim-deep: #1d3557;
+    --gold: #f2b544;
+    --sky: #7eb6e0;
+    --sand: #f3e2c4;
+    --stage: #3a4048;
+    --plate: #c8c8c8;
+    --line: #1c2430;
   }
   * { box-sizing: border-box; }
-  html, body { margin:0; height:100%; }
+  html, body { margin: 0; height: 100%; }
   body {
-    height:100dvh; overflow:hidden; background:var(--bg); color:var(--ink);
-    font-family:"Helvetica Neue", Helvetica, Arial, sans-serif; font-size:14px;
-    display:grid; grid-template-columns:60% 40%; grid-template-rows:52px minmax(0,1fr);
+    height: 100dvh;
+    overflow: hidden;
+    color: var(--ink);
+    font-family: Nunito, "Trebuchet MS", "Segoe UI", sans-serif;
+    font-size: 15px;
+    background:
+      radial-gradient(900px 280px at 100% 0%, #ffd48a 0%, transparent 60%),
+      radial-gradient(700px 320px at 0% 100%, #8ec4ea 0%, transparent 55%),
+      var(--sand);
+    display: flex;
+    flex-direction: column;
   }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+  :focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
   header {
-    grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between;
-    padding:0 16px; background:var(--panel); border-bottom:1px solid var(--rule);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 16px;
+    background: var(--denim-deep);
+    color: white;
+    border-bottom: 5px solid var(--claw);
   }
-  header .brand { font-family:Georgia, serif; font-size:20px; font-weight:700; }
-  header .brand small { font-weight:400; font-size:12px; color:var(--muted); margin-left:8px; }
-  header .meta { font-size:12px; color:var(--muted); }
-  #viewer { position:relative; min-height:0; background:var(--viewer); overflow:hidden; }
-  #viewer canvas { display:block; width:100%; height:100%; }
-  #preview { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:var(--viewer); z-index:1; }
-  .viewer-note {
-    position:absolute; z-index:3; left:16px; right:16px; bottom:16px;
-    font-size:12px; color:var(--muted); background:var(--panel); padding:8px 12px;
-    border:1px solid var(--rule);
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .brand .mark {
+    width: 42px; height: 48px; flex: none;
+    background: var(--cream);
+    border: 2px solid var(--ink);
+    border-radius: 12px;
+    padding: 2px 3px 0;
   }
-  .panel { min-height:0; display:flex; flex-direction:column; background:var(--panel); border-left:1px solid var(--rule); }
-  .panel-scroll { flex:1; min-height:0; overflow:auto; padding:0 16px 8px; }
-  .section { padding:16px 0; border-bottom:1px solid var(--rule); }
-  .section h2 { margin:0 0 8px; font-size:14px; font-weight:600; }
-  .row { display:flex; gap:8px; align-items:center; margin:8px 0; flex-wrap:wrap; }
-  .quiet-line { font-size:12px; color:var(--muted); margin:4px 0; }
-  label { font-size:12px; color:var(--muted); }
-  select, button, input {
-    background:var(--inset); color:var(--ink); border:1px solid var(--rule);
-    border-radius:2px; min-height:36px; padding:6px 8px; font-size:14px;
+  .brand h1 {
+    margin: 0;
+    font-family: Fredoka, Nunito, sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1;
   }
-  button { cursor:pointer; }
-  button:focus-visible, input:focus-visible, select:focus-visible { outline:2px solid var(--claw); outline-offset:1px; }
-  button.primary { background:var(--claw); color:var(--on-solid); border-color:var(--claw); font-weight:600; }
-  button.ghost { background:var(--inset); color:var(--claw); border-color:var(--claw); }
-  button.hardware { background:var(--ink); color:var(--on-solid); border-color:var(--ink); font-weight:700; min-height:44px; width:100%; }
-  button.danger { background:var(--inset); color:var(--claw); }
-  .metric { display:flex; justify-content:space-between; gap:8px; margin:4px 0; font-variant-numeric:tabular-nums; }
-  .metric span:first-child { color:var(--muted); }
-  .empty { font-size:12px; color:var(--muted); margin:4px 0; }
-  .rev { font-size:14px; padding:8px; margin:8px 0 0; background:var(--inset); border:1px solid var(--rule); display:flex; justify-content:space-between; gap:8px; }
-  .rev.active { background:var(--active); }
-  .rev.hash { font-size:12px; color:var(--muted); }
-  #cam { width:100%; height:120px; object-fit:cover; border:1px solid var(--rule); background:var(--inset); }
-  .chat-log { padding:4px 0; }
-  .msg { margin:8px 0; padding:8px; background:var(--inset); border:1px solid var(--rule); white-space:pre-wrap; }
-  .msg.user { background:var(--user); }
-  .composer { display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--rule); background:var(--panel); }
-  .composer input { flex:1; }
-  .folded { display:none; }
-  @media (max-width:700px) {
-    body { grid-template-columns:1fr; grid-template-rows:48px minmax(200px,32vh) minmax(0,1fr); }
-    header .brand small, header .meta { display:none; }
-    .panel { border-left:none; border-top:1px solid var(--rule); }
-    .panel-scroll, .composer { padding-left:12px; padding-right:12px; }
-    select, button, input { min-height:44px; }
-    input, select { font-size:16px; }
-    .composer { flex-wrap:wrap; }
-    .composer input, .composer button { width:100%; }
+  .brand p { margin: 2px 0 0; font-size: 13px; color: #d5e4f5; }
+
+
+  .bench {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.78fr);
+    gap: 14px;
+    padding: 14px;
+  }
+  .stage, .chat {
+    min-height: 0;
+    background: var(--paper);
+    border: 3px solid var(--line);
+    border-radius: 22px;
+    box-shadow: 6px 6px 0 var(--line);
+    position: relative;
+  }
+  .stage { overflow: hidden; background: var(--stage); }
+  #viewport { position: absolute; inset: 0; }
+  #viewport canvas { display: block; width: 100%; height: 100%; }
+
+  .view-presets, .stage-foot { position: absolute; z-index: 2; }
+  .view-presets { top: 12px; right: 12px; display: flex; gap: 6px; }
+  .stage-foot {
+    left: 10px; right: 10px; bottom: 10px;
+    display: flex; align-items: flex-end; gap: 10px;
+  }
+  .stage-foot .grow { flex: 1; min-width: 0; }
+  .stage-foot p { margin: 0; color: #f4f1ea; font-size: 12px; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,.55); }
+  .view-presets button, .slice, .chip, .ctrl button, .ghost {
+    border: 2px solid var(--line);
+    background: var(--cream);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-weight: 800;
+    box-shadow: 2px 2px 0 var(--line);
+  }
+  .view-presets button.on { background: var(--gold); }
+  .slice {
+    position: static; flex: none;
+    background: var(--claw); color: white;
+    padding: 10px 18px;
+    font-family: Fredoka, Nunito, sans-serif;
+    font-size: 18px;
+  }
+
+  .dash {
+    position: absolute;
+    z-index: 3;
+    top: 12px; left: 12px;
+    width: 292px;
+    max-height: calc(100% - 78px);
+    background: var(--ink);
+    border-radius: 26px;
+    padding: 8px;
+    box-shadow: 6px 8px 0 rgba(28, 36, 48, 0.28);
+  }
+  .dash-toggle {
+    display: none;
+    border: 2px solid var(--line);
+    background: var(--cream);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-weight: 800;
+    box-shadow: 2px 2px 0 var(--line);
+  }
+  .dash-screen {
+    background: var(--cream);
+    border-radius: 18px;
+    padding: 12px;
+    max-height: calc(100dvh - 160px);
+    overflow: auto;
+  }
+  .dash-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .state {
+    font-family: Fredoka, Nunito, sans-serif;
+    font-weight: 700;
+    background: var(--denim);
+    color: white;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 14px;
+  }
+  .state[data-kind="printing"] { background: var(--claw); }
+  .state[data-kind="paused"] { background: #c4841d; color: white; }
+  .state[data-kind="bad"] { background: var(--ink); }
+  .source { font-size: 12px; font-weight: 800; color: var(--denim); }
+  .ring-wrap { position: relative; width: 128px; height: 128px; margin: 8px auto 4px; }
+  .ring { width: 128px; height: 128px; display: block; }
+  .ring .track { fill: none; stroke: #eadfce; stroke-width: 10; }
+  .ring .arc { fill: none; stroke: var(--claw); stroke-width: 10; stroke-linecap: round; }
+  .ring-label {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .ring-label strong { font-family: Fredoka, Nunito, sans-serif; font-size: 28px; line-height: 1; }
+  .ring-label span { font-size: 12px; font-weight: 800; color: #6d6256; }
+  .temps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .temp {
+    background: white;
+    border: 2px solid var(--line);
+    border-radius: 14px;
+    padding: 8px;
+  }
+  .temp span { display: block; font-size: 12px; font-weight: 800; color: #6d6256; }
+  .temp strong { font-family: Fredoka, Nunito, sans-serif; font-size: 22px; }
+  .job, .left, .dash-note { margin: 8px 0 0; font-size: 13px; font-weight: 800; }
+  .left, .dash-note { font-weight: 700; color: #5c5148; }
+  .cam-wrap { margin-top: 8px; }
+  #cam {
+    width: 100%; height: 120px; object-fit: cover; background: #111;
+    border-radius: 12px; border: 2px solid var(--line);
+  }
+  #camNote { margin: 0; font-size: 12px; font-weight: 800; color: #6d6256; }
+  .ctrls { display: flex; gap: 6px; margin-top: 10px; }
+  .ctrls button { flex: 1; padding: 8px 6px; }
+  #startBtn { background: var(--claw); color: white; }
+  #pauseBtn.resume { background: var(--gold); }
+  #cancelBtn { background: white; }
+  .wide { width: 100%; margin-top: 6px; }
+  #simulateBtn { background: var(--sky); }
+
+  .chat { display: flex; flex-direction: column; background: var(--cream); }
+  .chat-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 3px solid var(--line);
+  }
+  .chat-bar h2 {
+    margin: 0; font-family: Fredoka, Nunito, sans-serif; font-size: 18px;
+  }
+  .picks { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .picks label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; }
+  select {
+    appearance: none;
+    background: white url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1l5 5 5-5' stroke='%231c2430' stroke-width='2' fill='none'/></svg>") no-repeat right 8px center;
+    border: 2px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 28px 6px 10px;
+    font-weight: 800;
+  }
+  .thread { flex: 1; min-height: 0; overflow: auto; padding: 16px 14px 8px; }
+  .empty { text-align: center; padding: 12px 12px 4px; }
+  .empty .hero { width: 96px; height: 112px; margin: 0 auto 6px; }
+  .empty h3 {
+    margin: 0;
+    font-family: Fredoka, Nunito, sans-serif;
+    font-size: 28px;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+  }
+  .empty p { margin: 8px auto 0; max-width: 36ch; font-weight: 700; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+  .msg { display: flex; gap: 8px; margin: 0 0 12px; align-items: flex-end; }
+  .msg.user { justify-content: flex-end; }
+  .msg .avatar { width: 36px; height: 42px; flex: none; }
+  .bubble {
+    max-width: min(78%, 460px);
+    padding: 10px 12px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+  }
+  .msg.assistant .bubble {
+    background: white;
+    border: 2px solid var(--line);
+    border-radius: 6px 18px 18px 18px;
+  }
+  .msg.user .bubble {
+    background: var(--denim);
+    color: white;
+    border-radius: 18px 18px 6px 18px;
+    font-weight: 700;
+  }
+  .bubble p { margin: 0; }
+  .meta { margin: 6px 0 0; font-size: 12px; font-weight: 800; color: #6d6256; }
+  .tools { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .tools i {
+    font-style: normal; font-size: 11px; font-weight: 800;
+    background: var(--sand); border-radius: 999px; padding: 2px 7px;
+  }
+  .composer {
+    display: flex; gap: 8px; align-items: flex-end;
+    padding: 10px 12px 12px;
+    border-top: 3px solid var(--line);
+  }
+  textarea {
+    flex: 1; resize: none; min-height: 52px; max-height: 140px;
+    border: 2px solid var(--line); border-radius: 16px;
+    padding: 12px 14px; background: white;
+  }
+  #send {
+    background: var(--claw); color: white; border: 2px solid var(--line);
+    border-radius: 16px; padding: 12px 16px; font-weight: 800;
+    box-shadow: 3px 3px 0 var(--line);
+  }
+  .fit { border-top: 3px solid var(--line); padding: 0 12px 12px; }
+  .fit summary { cursor: pointer; font-weight: 800; padding: 10px 0; }
+  .hint { margin: 0 0 8px; font-size: 13px; font-weight: 700; }
+  .fit textarea, .fit input {
+    width: 100%; margin: 0 0 8px; border: 2px solid var(--line); border-radius: 12px;
+    padding: 8px 10px; background: white;
+  }
+  .fit textarea { min-height: 64px; resize: vertical; }
+  #fitBtn { background: var(--gold); }
+  .notes { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .note, .rev {
+    background: white; border: 2px solid var(--line); border-radius: 12px; padding: 8px 10px;
+    font-size: 13px; font-weight: 700;
+  }
+  .rev.current { background: #fff1c9; }
+  .rev span { display: block; font-size: 12px; color: #6d6256; }
+  .viewer-fallback {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    color: white; font-weight: 800; padding: 24px; text-align: center;
+  }
+
+  @media (max-width: 860px) {
+    .bench { grid-template-columns: 1fr; grid-template-rows: minmax(220px, 38vh) minmax(0, 1fr); padding: 8px; gap: 8px; }
+    .dash { width: auto; right: 12px; }
+    .dash-toggle { display: inline-flex; }
+    .dash:not(.open) { background: transparent; padding: 0; box-shadow: none; width: auto; right: auto; }
+    .dash:not(.open) .dash-screen { display: none; }
+    .orbit-hint { display: none; }
+    .empty .hero { width: 64px; height: 74px; }
+    .empty p { display: none; }
+    .brand h1 { font-size: 22px; }
+    .empty h3 { font-size: 22px; }
   }
 </style>
 </head>
 <body>
+<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0" aria-hidden="true">
+  <symbol id="pocket" viewBox="0 0 64 74">
+    <rect x="16" y="56" width="10" height="14" rx="1" fill="#b4332c"/>
+    <rect x="38" y="56" width="10" height="14" rx="1" fill="#b4332c"/>
+    <rect x="14" y="18" width="36" height="42" rx="2" fill="#d6453a"/>
+    <rect x="2" y="30" width="14" height="9" rx="1" fill="#b4332c"/>
+    <rect x="48" y="36" width="14" height="9" rx="1" fill="#b4332c"/>
+    <rect x="22" y="30" width="7" height="7" fill="#6e1c18"/>
+    <rect x="35" y="30" width="7" height="7" fill="#6e1c18"/>
+    <rect x="29" y="44" width="7" height="3" fill="#6e1c18"/>
+  </symbol>
+</svg>
+
 <header>
-  <div class="brand">CaliClaw <small>printing workbench</small></div>
-  <div class="meta">one part</div>
-</header>
-<div id="viewer">
-  <canvas id="c"></canvas>
-  <img id="preview" src="/fixtures/cube.png" alt="Sample cube until a build succeeds" />
-  <div class="viewer-note" id="viewerNote">Sample fixture shown until a build succeeds.</div>
-</div>
-<div class="panel">
-  <div class="panel-scroll">
-    <section class="section">
-      <h2>Design</h2>
-      <div class="row"><strong id="projectName">Workshop</strong><span class="quiet-line">one part</span></div>
-      <div class="row">
-        <label for="model">Model</label>
-        <select id="model"><option>Configured model</option><option>Comparison model</option></select>
-      </div>
-    </section>
-
-    <section class="section">
-      <h2>Revisions</h2>
-      <div id="revList"><p class="empty">No revisions yet.</p></div>
-    </section>
-
-    <section class="section">
-      <h2>Checks</h2>
-      <div class="metric"><span>Watertight</span><span id="vWat">—</span></div>
-      <div class="metric"><span>Components</span><span id="vComp">—</span></div>
-      <div class="metric"><span>Bounds</span><span id="vBounds">—</span></div>
-      <div class="metric"><span>Volume</span><span id="vVol">—</span></div>
-    </section>
-
-    <section class="section">
-      <h2>Prepare</h2>
-      <div class="metric"><span>Profile</span><span>ender3-proven-pla</span></div>
-      <div class="metric"><span>Est. time</span><span id="sEst">—</span></div>
-      <div class="row"><button id="sliceBtn" type="button">Prepare slice</button><button id="simulateBtn" type="button">Simulated print</button></div>
-    </section>
-
-    <section class="section">
-      <h2>Print</h2>
-      <div class="metric"><span>Source</span><span id="pSource">—</span></div>
-      <div class="metric"><span>State</span><span id="pState">—</span></div>
-      <div class="metric"><span>Hotend</span><span id="pHot">—</span></div>
-      <div class="metric"><span>Bed</span><span id="pBed">—</span></div>
-      <div class="metric"><span>Job</span><span id="pJob">—</span></div>
-      <div class="metric"><span>Progress</span><span id="pProgress">—</span></div>
-      <img id="cam" alt="Printer camera" hidden />
-      <p class="empty" id="camNote">Camera unavailable.</p>
-      <div class="row">
-        <button id="uploadBtn" type="button">Upload</button>
-        <button id="pauseBtn" type="button">Pause</button>
-        <button id="cancelBtn" class="danger" type="button">Cancel</button>
-      </div>
-      <button id="startBtn" class="hardware" type="button">Start</button>
-      <p class="quiet-line">Controls require explicit intent and a checked artifact.</p>
-    </section>
-
-    <section class="section">
-      <h2>Fit</h2>
-      <div id="fitList"><p class="empty">No fit notes yet. Record what you measured. The rest of the part stays.</p></div>
-      <div class="row"><input id="fitNote" placeholder="USB opening is 2 mm too far right" style="flex:1" /></div>
-      <div class="row"><input id="fitKeep" placeholder="Keep: mounting hole spacing" style="flex:1" /><button id="fitBtn" class="ghost" type="button">Record fit</button></div>
-      <div class="metric"><span>Keep</span><span id="fitKeepList">—</span></div>
-      <div class="folded">
-        <span id="mBounds">—</span><span id="mSlice">—</span><span id="mTokens">—</span><span id="mTools">—</span><span id="mRevs">—</span><span id="mReason">—</span>
-      </div>
-    </section>
-
-    <section class="section">
-      <div class="chat-log" id="log">
-        <div class="msg">Describe the part, or say what the print taught you. Kept features stay put.</div>
-      </div>
-    </section>
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 64 74"><use href="#pocket"/></svg>
+    <div>
+      <h1>CaliClaw</h1>
+      <p id="projectName">Workshop</p>
+    </div>
   </div>
-  <form class="composer" id="composer">
-    <input id="input" placeholder="A bracket, 40 mm wide, holes 30 mm apart…" />
-    <button id="send" class="primary" type="submit">Send</button>
-  </form>
+</header>
+
+<div class="bench">
+  <section class="stage" aria-label="Prepare view">
+    <div id="viewport">
+      <div class="view-presets" role="group" aria-label="Camera">
+        <button type="button" data-view="front">Front</button>
+        <button type="button" data-view="top">Top</button>
+        <button type="button" data-view="iso" class="on">Iso</button>
+      </div>
+      <div class="stage-foot">
+        <div class="grow">
+          <p id="viewerNote">Pocket CaliClaw on the plate, until a build replaces it.</p>
+          <p id="stageStatus"></p>
+          <p class="orbit-hint">Drag to orbit · middle pan · wheel zoom · 220 × 220 × 250</p>
+        </div>
+        <button type="button" class="slice" id="sliceBtn">Slice</button>
+      </div>
+    </div>
+    <aside class="dash" id="dash">
+      <button type="button" class="dash-toggle ctrl" id="dashToggle">Printer</button>
+      <div class="dash-screen">
+        <div class="dash-top">
+          <span class="state" id="pState" data-kind="idle">—</span>
+          <span class="source" id="pSource">—</span>
+        </div>
+        <div class="ring-wrap">
+          <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="track" cx="60" cy="60" r="52"/>
+            <circle class="arc" id="pArc" cx="60" cy="60" r="52" transform="rotate(-90 60 60)"/>
+          </svg>
+          <div class="ring-label">
+            <strong id="pProgress">—</strong>
+            <span>job</span>
+          </div>
+        </div>
+        <div class="temps">
+          <div class="temp">
+            <span>Nozzle</span>
+            <strong id="pHot">—</strong>
+            <span id="pHotTarget"></span>
+          </div>
+          <div class="temp">
+            <span>Bed</span>
+            <strong id="pBed">—</strong>
+            <span id="pBedTarget"></span>
+          </div>
+        </div>
+        <p class="job" id="pJob">No file selected</p>
+        <p class="left" id="pLeft"></p>
+        <div class="cam-wrap">
+          <img id="cam" alt="Printer camera" hidden />
+          <p id="camNote" hidden></p>
+        </div>
+        <p class="dash-note" id="dashNote" role="status"></p>
+        <div class="ctrls">
+          <button type="button" id="startBtn">Start</button>
+          <button type="button" id="pauseBtn">Pause</button>
+          <button type="button" id="cancelBtn">Cancel</button>
+        </div>
+        <button type="button" class="ghost wide" id="uploadBtn">Upload gcode</button>
+        <button type="button" class="ghost wide" id="simulateBtn" hidden>Play a simulated job</button>
+      </div>
+    </aside>
+  </section>
+
+  <section class="chat" aria-label="Chat">
+    <div class="chat-bar">
+      <h2>Chat</h2>
+      <div class="picks">
+        <label>Model
+          <select id="model" aria-label="Model">
+            <option value="">Workshop model</option>
+            <option value="comparison">Comparison model</option>
+          </select>
+        </label>
+        <label>Effort
+          <select id="effort" aria-label="Effort">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="thread" id="thread">
+      <div class="empty" id="empty">
+        <svg class="hero" viewBox="0 0 64 74"><use href="#pocket"/></svg>
+        <h3>hey, what are we printing?</h3>
+        <p>One part. Ask for a change, and the rest stays. Start and cancel live on the printer card, and they ask first.</p>
+        <div class="chips">
+          <button type="button" class="chip" data-suggest="A bracket, 40 mm wide, two holes 30 mm apart.">40 mm bracket</button>
+          <button type="button" class="chip" data-suggest="How is the printer right now?">Check the printer</button>
+          <button type="button" class="chip" data-suggest="What should I measure before the next revision?">What to measure</button>
+        </div>
+      </div>
+    </div>
+    <form class="composer" id="composer">
+      <textarea id="input" rows="1" placeholder="A bracket, 40 mm wide, holes 30 mm apart…"></textarea>
+      <button type="submit" id="send">Send</button>
+    </form>
+    <details class="fit">
+      <summary>Record a measurement</summary>
+      <p class="hint">A fit note is memory for the next chat. It does not edit the part by itself.</p>
+      <textarea id="fitNote" placeholder="Hole was 0.4 mm tight"></textarea>
+      <input id="fitKeep" placeholder="Keep: hole spacing, wall thickness" />
+      <button type="button" class="ghost" id="fitBtn">Save note</button>
+      <p class="hint" id="fitStatus"></p>
+      <p class="hint" id="fitKeepList"></p>
+      <div class="notes" id="fitList"></div>
+      <div class="notes" id="revList"></div>
+    </details>
+  </section>
 </div>
 
-<script type="module">
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+<script>
+const BED = { x: 220, y: 220, z: 250 };
+const FIXTURE = '/fixtures/pocket-caliclaw.stl';
+const input = document.getElementById('input');
+const thread = document.getElementById('thread');
+const empty = document.getElementById('empty');
+const sendBtn = document.getElementById('send');
+const arc = document.getElementById('pArc');
+const ARC_LEN = 2 * Math.PI * 52;
+arc.style.strokeDasharray = String(ARC_LEN);
 
-const container = document.getElementById('viewer');
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xddd6c8);
-const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-camera.position.set(80, 60, 80);
-let renderer = null;
-try { renderer = new THREE.WebGLRenderer({ antialias: true }); } catch (e) { console.error('WebGL failed', e); }
-if (!renderer) {
-  const msg = document.createElement('div');
-  msg.className = 'viewer-note';
-  msg.textContent = 'WebGL unavailable in this browser. 3D preview disabled.';
-  container.appendChild(msg);
+function safeDetail(data, fallback) {
+  let detail = data && data.detail;
+  if (Array.isArray(detail)) detail = detail.map((item) => item.msg || '').join(' ');
+  if (typeof detail !== 'string' || !detail.trim()) return fallback;
+  if (/https?:\/\/|(?:\d{1,3}\.){3}\d{1,3}|bearer\s+\S+/i.test(detail)) return fallback;
+  return detail.length > 280 ? detail.slice(0, 280) : detail;
 }
-if (renderer) {
-  renderer.setSize(container.clientWidth, container.clientHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setClearColor(0xddd6c8, 1);
-  container.insertBefore(renderer.domElement, container.firstChild);
+
+function fmtDuration(seconds) {
+  const n = Number(seconds);
+  if (!Number.isFinite(n)) return '';
+  const s = Math.max(0, Math.round(n));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  if (h) return h + 'h ' + m + 'm';
+  if (m) return m + 'm ' + r + 's';
+  return r + 's';
 }
-const controls = renderer ? new OrbitControls(camera, renderer.domElement) : null;
-if (controls) controls.enableDamping = true;
-scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-const dir = new THREE.DirectionalLight(0xffffff, 0.8);
-dir.position.set(50, 80, 50);
-scene.add(dir);
-scene.add(new THREE.GridHelper(120, 12, 0xc4bcae, 0xc4bcae));
-const plate = new THREE.Mesh(
-  new THREE.BoxGeometry(120, 2, 120),
-  new THREE.MeshStandardMaterial({ color: 0xcfc6b6, roughness: 0.9 })
-);
-plate.position.y = -1;
-scene.add(plate);
 
-let currentMesh = null;
-const mat = new THREE.MeshStandardMaterial({ color: 0x8d8274, roughness: 0.55, metalness: 0.05 });
-const loader = new STLLoader();
-
-function loadSTL(url, replaceFixture) {
-  if (currentMesh) { scene.remove(currentMesh); currentMesh.geometry.dispose(); }
-  loader.load(url + '?t=' + Date.now(), (geom) => {
-    geom.computeVertexNormals();
-    const m = new THREE.Mesh(geom, mat);
-    geom.computeBoundingBox();
-    const c = geom.boundingBox.getCenter(new THREE.Vector3());
-    m.position.sub(c);
-    m.position.y += (geom.boundingBox.max.y - geom.boundingBox.min.y) / 2;
-    scene.add(m);
-    currentMesh = m;
-    if (replaceFixture) {
-      const pv = document.getElementById('preview');
-      if (pv) pv.hidden = true;
-      const note = document.getElementById('viewerNote');
-      if (note) note.hidden = true;
-    }
-    const size = geom.boundingBox.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-    camera.position.set(maxDim * 1.6, maxDim * 1.2, maxDim * 1.6);
-    if (controls) controls.target.set(0, size.y / 2, 0);
-  }, undefined, (err) => {
-    console.error('STL load failed', err);
-  });
+function deg(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return (Math.round(n * 10) / 10).toFixed(1).replace(/\.0$/, '');
 }
-window.loadSTL = loadSTL;
-loadSTL('/fixtures/cube.stl', false);
 
-function frame() {
-  requestAnimationFrame(frame);
-  if (renderer) { controls.update(); renderer.render(scene, camera); }
+function tempReadout(block, flat) {
+  if (block && (block.actual != null || block.target != null)) {
+    const actual = deg(block.actual);
+    const target = deg(block.target);
+    return {
+      actual: actual == null ? '—' : actual + '°',
+      target: target == null ? '' : 'target ' + target + '°'
+    };
+  }
+  const only = deg(flat);
+  if (only == null) return { actual: '—', target: '' };
+  return { actual: only + '°', target: 'simulated' };
 }
-frame();
-window.addEventListener('resize', () => {
-  if (renderer) renderer.setSize(container.clientWidth, container.clientHeight);
-  camera.aspect = container.clientWidth / container.clientHeight;
-  camera.updateProjectionMatrix();
-});
 
+let camState = 'unknown';
 const cam = document.getElementById('cam');
 const camNote = document.getElementById('camNote');
-let camState = 'unknown';
-cam.onerror = () => { camState = 'off'; cam.hidden = true; camNote.hidden = false; camNote.textContent = 'Camera unavailable.'; };
-cam.onload = () => { camState = 'on'; cam.hidden = false; camNote.hidden = true; };
+cam.addEventListener('error', () => {
+  camState = 'off';
+  cam.hidden = true;
+  cam.removeAttribute('src');
+  camNote.hidden = false;
+  camNote.textContent = 'Camera unavailable.';
+});
+cam.addEventListener('load', () => {
+  camState = 'on';
+  cam.hidden = false;
+  camNote.hidden = true;
+});
 
 function refreshCamera(simulated) {
   if (simulated) {
     camState = 'sim';
     cam.hidden = true;
+    cam.removeAttribute('src');
     camNote.hidden = false;
     camNote.textContent = 'Simulated printer. No camera.';
     return;
@@ -266,156 +529,88 @@ function refreshCamera(simulated) {
   cam.src = '/api/camera?t=' + Date.now();
 }
 
+let resumeMode = false;
 async function pollPrinter() {
   try {
-    const r = await fetch('/api/printer');
-    const d = await r.json();
-    const simulated = Boolean(d.simulated) || d.source === 'simulated';
-    document.getElementById('pSource').textContent = d.source || (simulated ? 'simulated' : 'octoprint');
-    document.getElementById('pState').textContent = d.state || '—';
-    document.getElementById('pHot').textContent = d.hotend ? (d.hotend.actual + ' / ' + d.hotend.target + ' °C') : '—';
-    document.getElementById('pBed').textContent = d.bed ? (d.bed.actual + ' / ' + d.bed.target + ' °C') : '—';
-    document.getElementById('pJob').textContent = d.job || '—';
-    document.getElementById('pProgress').textContent = (d.progress != null) ? (Math.round(d.progress) + '%') : '—';
+    const res = await fetch('/api/printer');
+    const data = await res.json();
+    const simulated = Boolean(data.simulated) || String(data.source || '').indexOf('simulated') === 0;
+    const state = data.state || '—';
+    const stateEl = document.getElementById('pState');
+    stateEl.textContent = state;
+    const kind = /print/i.test(state) ? 'printing' : /pause/i.test(state) ? 'paused' : /error|disconnect|stale/i.test(state) ? 'bad' : 'idle';
+    stateEl.dataset.kind = kind;
+    const sourceEl = document.getElementById('pSource');
+    sourceEl.textContent = simulated ? 'Simulated' : 'OctoPrint';
+    sourceEl.title = simulated ? 'OctoPrint did not answer. This card is not the machine.' : 'Live OctoPrint';
+
+    let frac = null;
+    if (data.progress != null && Number.isFinite(Number(data.progress))) {
+      const n = Number(data.progress);
+      frac = simulated ? Math.min(1, Math.max(0, n)) : Math.min(1, Math.max(0, n / 100));
+    }
+    document.getElementById('pProgress').textContent = frac == null ? '—' : Math.round(frac * 100) + '%';
+    arc.style.strokeDashoffset = String(ARC_LEN * (1 - (frac || 0)));
+    arc.style.opacity = frac ? '1' : '0';
+
+    const hot = tempReadout(data.hotend, data.temperature);
+    const bed = tempReadout(data.bed, data.bed_temperature);
+    document.getElementById('pHot').textContent = hot.actual;
+    document.getElementById('pHotTarget').textContent = hot.target;
+    document.getElementById('pBed').textContent = bed.actual;
+    document.getElementById('pBedTarget').textContent = bed.target;
+    document.getElementById('pJob').textContent = data.job || 'No file selected';
+    const bits = [];
+    if (data.print_time != null) bits.push(fmtDuration(data.print_time) + ' in');
+    if (data.print_time_left != null) bits.push(fmtDuration(data.print_time_left) + ' left');
+    document.getElementById('pLeft').textContent = bits.join(' · ');
+
+    resumeMode = Boolean(data.flags && data.flags.paused) || /pause/i.test(state);
+    const pauseBtn = document.getElementById('pauseBtn');
+    pauseBtn.textContent = resumeMode ? 'Resume' : 'Pause';
+    pauseBtn.classList.toggle('resume', resumeMode);
+    for (const id of ['startBtn', 'pauseBtn', 'cancelBtn', 'uploadBtn']) {
+      const button = document.getElementById(id);
+      button.disabled = simulated;
+      button.title = simulated ? 'Simulated printer. This does not move the machine.' : '';
+    }
+    document.getElementById('simulateBtn').hidden = !simulated;
+    document.getElementById('dashToggle').textContent = 'Printer · ' + state;
     refreshCamera(simulated);
-  } catch (e) { console.error(e); }
+  } catch (err) {
+    console.error(err);
+  }
 }
 pollPrinter();
 setInterval(pollPrinter, 3000);
 
-function renderRevisions(data) {
-  const el = document.getElementById('revList');
-  if (!Array.isArray(data) || data.length === 0) {
-    el.innerHTML = '<p class="empty">No revisions yet.</p>';
-    return;
-  }
-  el.innerHTML = data.map((rev, i) => {
-    const active = i === data.length - 1 ? ' active' : '';
-    const hash = (rev.source_hash || '').slice(0, 8);
-    return '<div class="rev' + active + '"><span>' + rev.id.slice(0, 12) + '</span><span class="hash">' + hash + '</span></div>';
-  }).join('');
-}
+document.getElementById('dashToggle').onclick = () => {
+  document.getElementById('dash').classList.toggle('open');
+};
 
-async function loadRevisions() {
-  try {
-    const r = await fetch('/api/revisions');
-    renderRevisions(await r.json());
-  } catch (e) { console.error(e); }
-}
-loadRevisions();
-
-async function loadProject() {
-  try {
-    const r = await fetch('/api/project');
-    if (!r.ok) return;
-    const d = await r.json();
-    document.getElementById('projectName').textContent = d.name || 'Workshop';
-    document.getElementById('fitKeepList').textContent = (d.keep && d.keep.length) ? d.keep.join(', ') : '—';
-    const list = document.getElementById('fitList');
-    if (!d.fit || d.fit.length === 0) {
-      list.innerHTML = '<p class="empty">No fit notes yet. Record what you measured. The rest of the part stays.</p>';
-      return;
-    }
-    list.innerHTML = d.fit.map((note) => '<div class="rev"><span>' + note.note + '</span></div>').join('');
-  } catch (e) { console.error(e); }
-}
-loadProject();
-window.loadProject = loadProject;
-
-document.getElementById('fitBtn').onclick = async () => {
-  const note = document.getElementById('fitNote').value.trim();
-  const keepRaw = document.getElementById('fitKeep').value.replace(/^keep:\s*/i, '');
-  const keep = keepRaw.split(',').map((s) => s.trim()).filter(Boolean);
-  const res = await fetch('/api/fit', {
+async function postControl(url, body) {
+  const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ note, keep })
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined
   });
-  const data = await res.json();
-  if (!res.ok) {
-    document.getElementById('fitList').innerHTML = '<p class="empty">' + (data.detail || 'Could not record the fit') + '</p>';
-    return;
-  }
-  document.getElementById('fitNote').value = '';
-  loadProject();
-};
-
-const log = document.getElementById('log');
-const input = document.getElementById('input');
-function applyReply(data) {
-  if (data.tokens != null) document.getElementById('mTokens').textContent = data.tokens;
-  if (data.reasoning_tokens != null) document.getElementById('mReason').textContent = data.reasoning_tokens;
-  if (data.tool_calls != null) document.getElementById('mTools').textContent = data.tool_calls;
-  if (data.revisions != null) document.getElementById('mRevs').textContent = data.revisions;
-  if (data.mesh_bounds) {
-    const bnd = data.mesh_bounds;
-    const s = (bnd[1][0] - bnd[0][0]) + ' × ' + (bnd[1][1] - bnd[0][1]) + ' × ' + (bnd[1][2] - bnd[0][2]) + ' mm';
-    document.getElementById('mBounds').textContent = s;
-    document.getElementById('vBounds').textContent = s;
-  }
-  if (data.mesh) {
-    document.getElementById('vWat').textContent = data.mesh.watertight ? 'yes' : 'no';
-    document.getElementById('vComp').textContent = data.mesh.components;
-    document.getElementById('vVol').textContent = (data.mesh.volume_mm3 || 0).toFixed(1) + ' mm³';
-  }
-  if (data.slice_estimate) {
-    document.getElementById('sEst').textContent = data.slice_estimate;
-    document.getElementById('mSlice').textContent = data.slice_estimate;
-  }
-  if (data.preview_url) {
-    const pv = document.getElementById('preview');
-    if (pv) { pv.hidden = false; pv.src = data.preview_url + '?t=' + Date.now(); }
-  }
-  if (data.stl_url) loadSTL(data.stl_url, true);
-  loadRevisions();
-  loadProject();
-}
-
-async function send() {
-  const v = input.value.trim();
-  if (!v) return;
-  input.value = '';
-  const u = document.createElement('div');
-  u.className = 'msg user';
-  u.textContent = v;
-  log.appendChild(u);
-  const b = document.createElement('div');
-  b.className = 'msg';
-  b.textContent = 'CaliClaw is working…';
-  log.appendChild(b);
-  log.scrollTop = log.scrollHeight;
-  try {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: v })
-    });
-    const text = await res.text();
-    let data;
-    try { data = JSON.parse(text); } catch (_) { throw new Error('Bad JSON: ' + text.slice(0, 200)); }
-    if (!res.ok) throw new Error((data && data.detail) || text);
-    b.textContent = (data.reply || 'No reply') + '\n\n[' + (data.tool_calls || 0) + ' tool calls, ' + (data.tokens || '?') + ' tokens]';
-    applyReply(data);
-  } catch (e) {
-    b.textContent = 'Error: ' + e;
-    console.error(e);
-  }
-  log.scrollTop = log.scrollHeight;
-}
-document.getElementById('composer').addEventListener('submit', (e) => { e.preventDefault(); send(); });
-
-document.getElementById('sliceBtn').onclick = async () => {
-  const res = await fetch('/api/slice', { method: 'POST' });
-  const data = await res.json();
-  if (data.estimates && data.estimates.printing_time) {
-    document.getElementById('sEst').textContent = data.estimates.printing_time;
-    document.getElementById('mSlice').textContent = data.estimates.printing_time;
-  }
-};
-document.getElementById('simulateBtn').onclick = async () => {
-  await fetch('/api/simulate/start', { method: 'POST' });
+  const data = await res.json().catch(() => ({}));
+  document.getElementById('dashNote').textContent = res.ok ? '' : safeDetail(data, 'The printer did not accept that.');
   pollPrinter();
+}
+
+document.getElementById('startBtn').onclick = () => {
+  if (!confirm('Start this print on the printer?')) return;
+  postControl('/api/printer/start', { confirm: true });
 };
+document.getElementById('cancelBtn').onclick = () => {
+  if (!confirm('Cancel the print on the printer?')) return;
+  postControl('/api/printer/cancel', { confirm: true });
+};
+document.getElementById('pauseBtn').onclick = () => {
+  postControl(resumeMode ? '/api/printer/resume' : '/api/printer/pause');
+};
+document.getElementById('simulateBtn').onclick = () => postControl('/api/simulate/start');
 document.getElementById('uploadBtn').onclick = () => {
   const picker = document.createElement('input');
   picker.type = 'file';
@@ -427,34 +622,438 @@ document.getElementById('uploadBtn').onclick = () => {
     body.append('file', file);
     const res = await fetch('/api/printer/upload', { method: 'POST', body });
     const data = await res.json().catch(() => ({}));
-    alert(res.ok ? 'Uploaded ' + file.name : (data.detail || 'Upload failed'));
+    document.getElementById('dashNote').textContent = res.ok ? 'Uploaded ' + file.name : safeDetail(data, 'Upload failed.');
   };
   picker.click();
 };
-document.getElementById('startBtn').onclick = async () => {
-  if (!confirm('Start print on OctoPrint?')) return;
-  const res = await fetch('/api/printer/start', {
+
+document.getElementById('sliceBtn').onclick = async () => {
+  const button = document.getElementById('sliceBtn');
+  const status = document.getElementById('stageStatus');
+  button.disabled = true;
+  try {
+    const res = await fetch('/api/slice', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      status.textContent = safeDetail(data, 'Slice did not run.');
+      return;
+    }
+    const estimate = data.estimates && data.estimates.printing_time;
+    status.textContent = estimate || data.error || 'Sliced.';
+  } finally {
+    button.disabled = false;
+  }
+};
+
+function addNote(parent, text, className) {
+  const el = document.createElement('div');
+  el.className = className;
+  el.textContent = text;
+  parent.appendChild(el);
+  return el;
+}
+
+async function loadProject() {
+  try {
+    const res = await fetch('/api/project');
+    if (!res.ok) return;
+    const data = await res.json();
+    document.getElementById('projectName').textContent = data.name || 'Workshop';
+    const keep = document.getElementById('fitKeepList');
+    keep.textContent = (data.keep && data.keep.length) ? 'Keeping: ' + data.keep.join(', ') : '';
+    const list = document.getElementById('fitList');
+    list.replaceChildren();
+    (data.fit || []).slice().reverse().forEach((note) => addNote(list, note.note || '', 'note'));
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function loadRevisions() {
+  try {
+    const res = await fetch('/api/revisions');
+    if (!res.ok) return;
+    const data = await res.json();
+    const list = document.getElementById('revList');
+    list.replaceChildren();
+    if (!Array.isArray(data) || data.length === 0) return;
+    data.slice().reverse().forEach((rev, index) => {
+      const el = document.createElement('div');
+      el.className = 'rev' + (index === 0 ? ' current' : '');
+      el.textContent = (index === 0 ? 'Current · ' : '') + String(rev.id || '').slice(0, 14);
+      const meta = document.createElement('span');
+      const when = rev.created_at ? String(rev.created_at).replace('T', ' ').slice(0, 16) : '';
+      const hash = rev.source_hash ? String(rev.source_hash).slice(0, 8) : '';
+      meta.textContent = [when, hash].filter(Boolean).join(' · ');
+      el.appendChild(meta);
+      list.appendChild(el);
+    });
+  } catch (err) {
+    console.error(err);
+  }
+}
+loadProject();
+loadRevisions();
+
+document.getElementById('fitBtn').onclick = async () => {
+  const note = document.getElementById('fitNote').value.trim();
+  const keep = document.getElementById('fitKeep').value.replace(/^keep:\s*/i, '').split(',').map((part) => part.trim()).filter(Boolean);
+  const res = await fetch('/api/fit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ confirm: true })
+    body: JSON.stringify({ note, keep })
   });
-  const data = await res.json();
-  alert(JSON.stringify(data));
-  pollPrinter();
+  const data = await res.json().catch(() => ({}));
+  const status = document.getElementById('fitStatus');
+  if (!res.ok) {
+    status.textContent = safeDetail(data, 'Could not record the fit.');
+    return;
+  }
+  document.getElementById('fitNote').value = '';
+  status.textContent = 'Saved. The next chat can see it. The part is unchanged.';
+  loadProject();
 };
-document.getElementById('pauseBtn').onclick = async () => {
-  await fetch('/api/printer/pause', { method: 'POST' });
-  pollPrinter();
-};
-document.getElementById('cancelBtn').onclick = async () => {
-  if (!confirm('Cancel current job?')) return;
-  await fetch('/api/printer/cancel', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ confirm: true })
+
+function hideEmpty() {
+  if (empty) empty.hidden = true;
+}
+
+function scrollThread() {
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function avatar() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 64 74');
+  svg.setAttribute('class', 'avatar');
+  svg.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', '#pocket');
+  svg.appendChild(use);
+  return svg;
+}
+
+function appendUser(text) {
+  const row = document.createElement('div');
+  row.className = 'msg user';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  const p = document.createElement('p');
+  p.textContent = text;
+  bubble.appendChild(p);
+  row.appendChild(bubble);
+  thread.appendChild(row);
+  scrollThread();
+}
+
+function appendAssistant(text) {
+  const row = document.createElement('div');
+  row.className = 'msg assistant';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  const p = document.createElement('p');
+  p.textContent = text;
+  bubble.appendChild(p);
+  row.append(avatar(), bubble);
+  thread.appendChild(row);
+  scrollThread();
+  return bubble;
+}
+
+function describeReply(data) {
+  const bits = [];
+  if (data.tool_calls) bits.push(data.tool_calls + ' tools');
+  bits.push((data.tokens == null ? '?' : data.tokens) + ' tokens');
+  if (data.reasoning_tokens != null) bits.push('reasoning ' + data.reasoning_tokens);
+  if (data.slice_estimate) bits.push(String(data.slice_estimate));
+  return bits.join(' · ');
+}
+
+let busy = false;
+async function send(preset) {
+  const text = (preset != null ? preset : input.value).trim();
+  if (!text || busy) return;
+  busy = true;
+  sendBtn.disabled = true;
+  input.value = '';
+  input.style.height = 'auto';
+  hideEmpty();
+  appendUser(text);
+  const bubble = appendAssistant('On it…');
+  try {
+    const body = { message: text, effort: document.getElementById('effort').value || 'medium' };
+    const model = document.getElementById('model').value;
+    if (model) body.model = model;
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const raw = await res.text();
+    let data = {};
+    try { data = JSON.parse(raw); } catch (_) { data = { detail: raw.slice(0, 180) }; }
+    if (!res.ok) throw new Error(safeDetail(data, 'The model did not answer.'));
+    bubble.querySelector('p').textContent = data.reply || 'No reply.';
+    const meta = document.createElement('p');
+    meta.className = 'meta';
+    meta.textContent = describeReply(data);
+    bubble.appendChild(meta);
+    const calls = Array.isArray(data.tool_calls_detail) ? data.tool_calls_detail : [];
+    if (calls.length) {
+      const tools = document.createElement('div');
+      tools.className = 'tools';
+      calls.forEach((call) => {
+        const chip = document.createElement('i');
+        chip.textContent = call.name || 'tool';
+        tools.appendChild(chip);
+      });
+      bubble.appendChild(tools);
+    }
+    if (data.stl_url && window.loadSTL) window.loadSTL(data.stl_url, true);
+    if (data.mesh_bounds) {
+      const box = data.mesh_bounds;
+      const span = (axis) => Math.abs(Number(box[1][axis]) - Number(box[0][axis]));
+      document.getElementById('stageStatus').textContent =
+        span(0).toFixed(0) + ' × ' + span(1).toFixed(0) + ' × ' + span(2).toFixed(0) + ' mm';
+    }
+    loadRevisions();
+    loadProject();
+  } catch (err) {
+    bubble.querySelector('p').textContent = err.message || 'The model did not answer.';
+  } finally {
+    busy = false;
+    sendBtn.disabled = false;
+    scrollThread();
+    input.focus();
+  }
+}
+
+document.getElementById('composer').addEventListener('submit', (event) => {
+  event.preventDefault();
+  send();
+});
+input.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    send();
+  }
+});
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(140, input.scrollHeight) + 'px';
+});
+document.querySelectorAll('[data-suggest]').forEach((button) => {
+  button.addEventListener('click', () => {
+    input.value = button.getAttribute('data-suggest');
+    input.dispatchEvent(new Event('input'));
+    input.focus();
   });
-  pollPrinter();
-};
+});
+
+async function bootViewer() {
+  const viewport = document.getElementById('viewport');
+  let THREE;
+  let OrbitControls;
+  let STLLoader;
+  try {
+    THREE = await import('three');
+    ({ OrbitControls } = await import('three/addons/controls/OrbitControls.js'));
+    ({ STLLoader } = await import('three/addons/loaders/STLLoader.js'));
+  } catch (err) {
+    console.error(err);
+    const note = document.createElement('div');
+    note.className = 'viewer-fallback';
+    note.textContent = '3D view did not load. Chat and the printer card still work.';
+    viewport.appendChild(note);
+    return;
+  }
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x3a4048);
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 4000);
+  let renderer = null;
+  try { renderer = new THREE.WebGLRenderer({ antialias: true }); }
+  catch (err) { console.error(err); }
+  if (!renderer) {
+    const note = document.createElement('div');
+    note.className = 'viewer-fallback';
+    note.textContent = 'WebGL is unavailable in this browser.';
+    viewport.appendChild(note);
+    return;
+  }
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NoToneMapping;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  viewport.insertBefore(renderer.domElement, viewport.firstChild);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.screenSpacePanning = true;
+  controls.maxPolarAngle = Math.PI * 0.49;
+  controls.minDistance = 40;
+  controls.maxDistance = 900;
+  controls.mouseButtons = {
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.PAN,
+    RIGHT: THREE.MOUSE.ROTATE
+  };
+  controls.target.set(0, 80, 0);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  scene.add(new THREE.HemisphereLight(0xfff1d6, 0x68707a, 0.45));
+  const key = new THREE.DirectionalLight(0xfff4e8, 1.15);
+  key.position.set(160, 280, 180);
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xc5d7ea, 0.35);
+  fill.position.set(-180, 120, -40);
+  scene.add(fill);
+
+  const plate = new THREE.Mesh(
+    new THREE.BoxGeometry(BED.x, 6, BED.y),
+    new THREE.MeshStandardMaterial({ color: 0xc5c5c5, roughness: 0.95, metalness: 0 })
+  );
+  plate.position.y = -3;
+  scene.add(plate);
+
+  function gridLines(step, color, opacity) {
+    const halfX = BED.x / 2;
+    const halfY = BED.y / 2;
+    const positions = [];
+    for (let x = 0; x <= halfX + 0.1; x += step) {
+      positions.push(x, 0.04, -halfY, x, 0.04, halfY);
+      if (x) positions.push(-x, 0.04, -halfY, -x, 0.04, halfY);
+    }
+    for (let z = 0; z <= halfY + 0.1; z += step) {
+      positions.push(-halfX, 0.04, z, halfX, 0.04, z);
+      if (z) positions.push(-halfX, 0.04, -z, halfX, 0.04, -z);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    return new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color, transparent: true, opacity }));
+  }
+  scene.add(gridLines(10, 0xf4f4f4, 0.8));
+  scene.add(gridLines(100, 0xffffff, 1));
+
+  const volume = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(BED.x, BED.z, BED.y)),
+    new THREE.LineBasicMaterial({ color: 0x3d9dff })
+  );
+  volume.position.y = BED.z / 2;
+  scene.add(volume);
+
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xd6453a,
+    roughness: 0.42,
+    metalness: 0.04,
+    side: THREE.DoubleSide
+  });
+  const loader = new STLLoader();
+  let current = null;
+  let loadToken = 0;
+
+  // Printer frame is Z-up, X to the right, Y toward the back.
+  // rotateX(-PI/2) maps (x, y, z) -> (x, z, -y). The pocket mesh was measured:
+  // eyes and mouth sit on printer Y = -8 (becomes three +Z, the front camera),
+  // and the staircase tail runs out to printer Y = +30 (three -Z, behind).
+  function seat(geometry) {
+    geometry.computeVertexNormals();
+    geometry.rotateX(-Math.PI / 2);
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox;
+    const cx = (box.min.x + box.max.x) / 2;
+    const cz = (box.min.z + box.max.z) / 2;
+    geometry.translate(-cx, -box.min.y + 0.2, -cz);
+    geometry.computeBoundingBox();
+    const mesh = new THREE.Mesh(geometry, material);
+    if (current) {
+      scene.remove(current);
+      current.geometry.dispose();
+    }
+    scene.add(mesh);
+    current = mesh;
+    return geometry.boundingBox.getSize(new THREE.Vector3());
+  }
+
+  async function loadSTL(url, replaceFixture) {
+    const token = ++loadToken;
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('missing');
+      const geometry = loader.parse(await res.arrayBuffer());
+      if (token !== loadToken) return;
+      const size = seat(geometry);
+      if (replaceFixture) {
+        document.getElementById('viewerNote').hidden = true;
+        document.getElementById('stageStatus').textContent =
+          size.x.toFixed(0) + ' × ' + size.z.toFixed(0) + ' × ' + size.y.toFixed(0) + ' mm on the plate';
+      }
+    } catch (err) {
+      if (token !== loadToken) return;
+      if (!current && url !== FIXTURE && url !== '/fixtures/cube.stl') {
+        loadSTL(FIXTURE, false);
+        return;
+      }
+      if (!current && url === FIXTURE) {
+        loadSTL('/fixtures/cube.stl', false);
+        return;
+      }
+      document.getElementById('stageStatus').textContent = replaceFixture
+        ? 'The new STL did not load. The plate is unchanged.'
+        : 'Could not load a model.';
+      console.error(err);
+    }
+  }
+  window.loadSTL = loadSTL;
+
+  const look = new THREE.Vector3(0, 80, 0);
+  function setView(mode) {
+    if (mode === 'top') {
+      camera.up.set(0, 0, -1);
+      camera.position.set(0, 700, 0.01);
+    } else if (mode === 'front') {
+      camera.up.set(0, 1, 0);
+      camera.position.set(0, 160, 640);
+    } else {
+      camera.up.set(0, 1, 0);
+      camera.position.set(460, 380, 460);
+    }
+    controls.target.copy(look);
+    camera.lookAt(look);
+    controls.update();
+  }
+  setView('iso');
+  document.querySelectorAll('[data-view]').forEach((button) => {
+    button.addEventListener('click', () => {
+      document.querySelectorAll('[data-view]').forEach((other) => other.classList.toggle('on', other === button));
+      setView(button.getAttribute('data-view'));
+    });
+  });
+  controls.addEventListener('start', () => {
+    document.querySelectorAll('[data-view]').forEach((button) => button.classList.remove('on'));
+  });
+
+  let lastW = 0;
+  let lastH = 0;
+  function frame() {
+    const width = viewport.clientWidth;
+    const height = viewport.clientHeight;
+    if (width && height && (width !== lastW || height !== lastH)) {
+      lastW = width;
+      lastH = height;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height, false);
+    }
+    controls.update();
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  frame();
+
+  loadSTL('/api/stl/current', true);
+}
+bootViewer();
 </script>
 </body>
 </html>
