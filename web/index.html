@@ -14,134 +14,156 @@
 </script>
 <style>
   :root {
-    --c0:#ffffcc; --c1:#ffeda0; --c2:#feb24c; --c3:#fd8d3c; --c4:#fc4e2a; --c5:#b10026;
-    --bg:#ffffcc; --panel:#ffeda0; --ink:#2a1208; --muted:#7a2e1a; --rule:#d9a06b; --accent:#fd8d3c;
+    --bg:#e8e2d6; --panel:#f6f3ec; --inset:#fbf9f5; --viewer:#ddd6c8;
+    --grid:#c4bcae; --plate:#cfc6b6; --filament:#8d8274;
+    --ink:#1b1916; --muted:#5e584e; --rule:#d4cec2;
+    --claw:#9d2c22; --on-solid:#f6f3ec; --user:#efe8dc; --active:#e7e0d2;
   }
   * { box-sizing: border-box; }
-  html, body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--ink); font-family:"Helvetica Neue",Helvetica,Arial,sans-serif; }
-  body { display:grid; grid-template-columns: 60% 40%; grid-template-rows: 56px 1fr; }
-  header { grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; padding:0 20px; border-bottom:2px solid var(--c5); background:var(--c1); }
-  header .brand { font-family:Georgia,serif; font-size:22px; font-weight:700; color:var(--c5); }
-  header .brand small { font-size:11px; color:var(--muted); margin-left:10px; text-transform:uppercase; letter-spacing:.12em; }
+  html, body { margin:0; height:100%; }
+  body {
+    height:100dvh; overflow:hidden; background:var(--bg); color:var(--ink);
+    font-family:"Helvetica Neue", Helvetica, Arial, sans-serif; font-size:14px;
+    display:grid; grid-template-columns:60% 40%; grid-template-rows:52px minmax(0,1fr);
+  }
+  header {
+    grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between;
+    padding:0 16px; background:var(--panel); border-bottom:1px solid var(--rule);
+  }
+  header .brand { font-family:Georgia, serif; font-size:20px; font-weight:700; }
+  header .brand small { font-weight:400; font-size:12px; color:var(--muted); margin-left:8px; }
   header .meta { font-size:12px; color:var(--muted); }
-  #viewer { position:relative; background:linear-gradient(135deg,#fffbe6,#ffeda0); overflow:hidden; }
-  #viewer canvas { display:block; width:100%; height:100%; position:absolute; top:0; left:0; z-index:2; background:transparent; }
-  .viewer-badge { position:absolute; top:12px; left:12px; padding:4px 8px; background:var(--c5); color:var(--c0); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border-radius:2px; }
-  .viewer-note { position:absolute; bottom:12px; left:12px; right:12px; font-size:11px; color:var(--muted); background:rgba(255,255,204,.9); padding:6px 10px; border-left:3px solid var(--c4); }
-  .panel { display:flex; flex-direction:column; background:var(--panel); border-left:1px solid var(--rule); overflow:hidden; }
-  .panel-scroll { flex:1; overflow:auto; padding:0 16px 16px; }
-  .section { padding:12px 0; border-bottom:1px solid var(--rule); }
-  .section:last-child { border-bottom:none; }
-  .section h3 { margin:0 0 8px; font-family:Georgia,serif; font-size:13px; text-transform:uppercase; letter-spacing:.12em; color:var(--c5); font-weight:700; }
-  .row { display:flex; gap:8px; align-items:center; margin:6px 0; flex-wrap:wrap; }
-  label { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
-  select, button, input { background:#fffbe6; color:var(--ink); border:1px solid var(--rule); border-radius:2px; padding:6px 8px; font-size:13px; }
+  #viewer { position:relative; min-height:0; background:var(--viewer); overflow:hidden; }
+  #viewer canvas { display:block; width:100%; height:100%; }
+  #preview { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:var(--viewer); z-index:1; }
+  .viewer-note {
+    position:absolute; z-index:3; left:16px; right:16px; bottom:16px;
+    font-size:12px; color:var(--muted); background:var(--panel); padding:8px 12px;
+    border:1px solid var(--rule);
+  }
+  .panel { min-height:0; display:flex; flex-direction:column; background:var(--panel); border-left:1px solid var(--rule); }
+  .panel-scroll { flex:1; min-height:0; overflow:auto; padding:0 16px 8px; }
+  .section { padding:16px 0; border-bottom:1px solid var(--rule); }
+  .section h2 { margin:0 0 8px; font-size:14px; font-weight:600; }
+  .row { display:flex; gap:8px; align-items:center; margin:8px 0; flex-wrap:wrap; }
+  .quiet-line { font-size:12px; color:var(--muted); margin:4px 0; }
+  label { font-size:12px; color:var(--muted); }
+  select, button, input {
+    background:var(--inset); color:var(--ink); border:1px solid var(--rule);
+    border-radius:2px; min-height:36px; padding:6px 8px; font-size:14px;
+  }
   button { cursor:pointer; }
-  button.primary { background:var(--c4); color:#fff; border:none; font-weight:600; }
-  .metric { display:flex; justify-content:space-between; font-size:13px; margin:4px 0; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline:2px solid var(--claw); outline-offset:1px; }
+  button.primary { background:var(--claw); color:var(--on-solid); border-color:var(--claw); font-weight:600; }
+  button.ghost { background:var(--inset); color:var(--claw); border-color:var(--claw); }
+  button.hardware { background:var(--ink); color:var(--on-solid); border-color:var(--ink); font-weight:700; min-height:44px; width:100%; }
+  button.danger { background:var(--inset); color:var(--claw); }
+  .metric { display:flex; justify-content:space-between; gap:8px; margin:4px 0; font-variant-numeric:tabular-nums; }
   .metric span:first-child { color:var(--muted); }
-  .kpi-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:6px 0; }
-  .kpi { background:#fffbe6; border:1px solid var(--rule); padding:6px 8px; border-radius:2px; }
-  .kpi .l { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
-  .kpi .v { font-size:16px; font-weight:700; color:var(--c5); font-variant-numeric:tabular-nums; }
-  .badge { font-size:11px; padding:2px 6px; border-radius:999px; background:var(--c4); color:#fff; }
-  .rev { font-size:12px; padding:4px 6px; border-radius:2px; background:#fffbe6; margin:2px 0; display:flex; justify-content:space-between; border:1px solid var(--rule); }
-  .rev.active { border-color:var(--c5); background:var(--c2); }
-  .msg { margin:6px 0; padding:8px; border-radius:2px; background:#fffbe6; border:1px solid var(--rule); }
-  .msg.user { background:var(--c2); }
-  .chat-log { max-height:260px; overflow:auto; padding:4px; }
-  .chat-input { display:flex; gap:6px; }
-  .chat-input input { flex:1; }
-  @media (max-width: 900px) { body { grid-template-columns:1fr; grid-template-rows:56px 50vh 1fr; } }
+  .empty { font-size:12px; color:var(--muted); margin:4px 0; }
+  .rev { font-size:14px; padding:8px; margin:8px 0 0; background:var(--inset); border:1px solid var(--rule); display:flex; justify-content:space-between; gap:8px; }
+  .rev.active { background:var(--active); }
+  .rev.hash { font-size:12px; color:var(--muted); }
+  #cam { width:100%; height:120px; object-fit:cover; border:1px solid var(--rule); background:var(--inset); }
+  .chat-log { padding:4px 0; }
+  .msg { margin:8px 0; padding:8px; background:var(--inset); border:1px solid var(--rule); white-space:pre-wrap; }
+  .msg.user { background:var(--user); }
+  .composer { display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--rule); background:var(--panel); }
+  .composer input { flex:1; }
+  .folded { display:none; }
+  @media (max-width:700px) {
+    body { grid-template-columns:1fr; grid-template-rows:48px minmax(200px,32vh) minmax(0,1fr); }
+    header .brand small, header .meta { display:none; }
+    .panel { border-left:none; border-top:1px solid var(--rule); }
+    .panel-scroll, .composer { padding-left:12px; padding-right:12px; }
+    select, button, input { min-height:44px; }
+    input, select { font-size:16px; }
+    .composer { flex-wrap:wrap; }
+    .composer input, .composer button { width:100%; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <div class="brand">CaliClaw <small>OpenClaw printing workbench</small></div>
-  <div class="meta">Single-part · Ender-3 / Klipper · OctoPrint</div>
+  <div class="brand">CaliClaw <small>printing workbench</small></div>
+  <div class="meta">one part</div>
 </header>
 <div id="viewer">
-  <canvas id="c" width="800" height="600"></canvas>
-  <img id="preview" src="/fixtures/cube.png" alt="preview" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fffbe6;z-index:1;" />
-  <div class="viewer-badge">Live preview</div>
-  <div class="viewer-note">Sample fixture shown until a build succeeds. Generated STL replaces it automatically.</div>
+  <canvas id="c"></canvas>
+  <img id="preview" src="/fixtures/cube.png" alt="Sample cube until a build succeeds" />
+  <div class="viewer-note" id="viewerNote">Sample fixture shown until a build succeeds.</div>
 </div>
 <div class="panel">
   <div class="panel-scroll">
-    <div class="section">
-      <h3>Design</h3>
-      <div class="row"><strong id="projectName">Workshop</strong><span class="badge">one part</span></div>
+    <section class="section">
+      <h2>Design</h2>
+      <div class="row"><strong id="projectName">Workshop</strong><span class="quiet-line">one part</span></div>
       <div class="row">
-        <label>Model</label>
+        <label for="model">Model</label>
         <select id="model"><option>Configured model</option><option>Comparison model</option></select>
       </div>
-    </div>
+    </section>
 
-    <div class="section">
-      <h3>Print</h3>
+    <section class="section">
+      <h2>Revisions</h2>
+      <div id="revList"><p class="empty">No revisions yet.</p></div>
+    </section>
+
+    <section class="section">
+      <h2>Checks</h2>
+      <div class="metric"><span>Watertight</span><span id="vWat">—</span></div>
+      <div class="metric"><span>Components</span><span id="vComp">—</span></div>
+      <div class="metric"><span>Bounds</span><span id="vBounds">—</span></div>
+      <div class="metric"><span>Volume</span><span id="vVol">—</span></div>
+    </section>
+
+    <section class="section">
+      <h2>Prepare</h2>
+      <div class="metric"><span>Profile</span><span>ender3-proven-pla</span></div>
+      <div class="metric"><span>Est. time</span><span id="sEst">—</span></div>
+      <div class="row"><button id="sliceBtn" type="button">Prepare slice</button><button id="simulateBtn" type="button">Simulated print</button></div>
+    </section>
+
+    <section class="section">
+      <h2>Print</h2>
       <div class="metric"><span>Source</span><span id="pSource">—</span></div>
       <div class="metric"><span>State</span><span id="pState">—</span></div>
       <div class="metric"><span>Hotend</span><span id="pHot">—</span></div>
       <div class="metric"><span>Bed</span><span id="pBed">—</span></div>
       <div class="metric"><span>Job</span><span id="pJob">—</span></div>
       <div class="metric"><span>Progress</span><span id="pProgress">—</span></div>
-    </div>
-
-    <div class="section">
-      <h3>OctoPrint camera</h3>
-      <img id="cam" src="/api/camera" alt="OctoPrint camera" style="width:100%; height:140px; object-fit:cover; border:1px solid var(--rule); margin-bottom:8px;" />
+      <img id="cam" alt="Printer camera" hidden />
+      <p class="empty" id="camNote">Camera unavailable.</p>
       <div class="row">
-        <button id="uploadBtn">Upload</button>
-        <button id="startBtn" class="primary">Start</button>
-        <button id="pauseBtn">Pause</button>
-        <button id="cancelBtn">Cancel</button>
+        <button id="uploadBtn" type="button">Upload</button>
+        <button id="pauseBtn" type="button">Pause</button>
+        <button id="cancelBtn" class="danger" type="button">Cancel</button>
       </div>
-      <div style="font-size:10px; color:var(--muted); margin-top:4px;">Controls require explicit intent and a checked artifact.</div>
-    </div>
+      <button id="startBtn" class="hardware" type="button">Start</button>
+      <p class="quiet-line">Controls require explicit intent and a checked artifact.</p>
+    </section>
 
-    <div class="section">
-      <h3>Checks</h3>
-      <div class="metric"><span>Watertight</span><span id="vWat">—</span></div>
-      <div class="metric"><span>Components</span><span id="vComp">—</span></div>
-      <div class="metric"><span>Bounds</span><span id="vBounds">—</span></div>
-      <div class="metric"><span>Volume</span><span id="vVol">—</span></div>
-    </div>
-
-    <div class="section">
-      <h3>Prepare</h3>
-      <div class="metric"><span>Profile</span><span>ender3-proven-pla</span></div>
-      <div class="metric"><span>Est. time</span><span id="sEst">—</span></div>
-      <div class="row"><button id="sliceBtn">Prepare slice</button><button id="simulateBtn">Simulated print</button></div>
-    </div>
-
-    <div class="section">
-      <h3>Revisions</h3>
-      <div id="revList"><div class="rev">No revisions yet.</div></div>
-    </div>
-
-    <div class="section">
-      <h3>Learn</h3>
-      <div id="fitList"><div class="rev">No fit notes yet. Record what you measured. The rest of the part stays.</div></div>
+    <section class="section">
+      <h2>Fit</h2>
+      <div id="fitList"><p class="empty">No fit notes yet. Record what you measured. The rest of the part stays.</p></div>
       <div class="row"><input id="fitNote" placeholder="USB opening is 2 mm too far right" style="flex:1" /></div>
-      <div class="row"><input id="fitKeep" placeholder="Keep: mounting hole spacing" style="flex:1" /><button id="fitBtn">Record fit</button></div>
+      <div class="row"><input id="fitKeep" placeholder="Keep: mounting hole spacing" style="flex:1" /><button id="fitBtn" class="ghost" type="button">Record fit</button></div>
       <div class="metric"><span>Keep</span><span id="fitKeepList">—</span></div>
-      <div class="metric"><span>Bounds</span><span id="mBounds">—</span></div>
-      <div class="metric"><span>Slice est.</span><span id="mSlice">—</span></div>
-      <div class="metric"><span>Last reply</span><span><span id="mTokens">—</span> tokens · <span id="mTools">—</span> tools · <span id="mRevs">—</span> revisions</span></div>
-      <div id="mReason" hidden>—</div>
-    </div>
+      <div class="folded">
+        <span id="mBounds">—</span><span id="mSlice">—</span><span id="mTokens">—</span><span id="mTools">—</span><span id="mRevs">—</span><span id="mReason">—</span>
+      </div>
+    </section>
 
-    <div class="section">
-      <h3>Design chat</h3>
+    <section class="section">
       <div class="chat-log" id="log">
         <div class="msg">Describe the part, or say what the print taught you. Kept features stay put.</div>
       </div>
-      <div class="chat-input">
-        <input id="input" placeholder="A bracket, 40 mm wide, holes 30 mm apart…" />
-        <button id="send" class="primary">Send</button>
-      </div>
-    </div>
+    </section>
   </div>
+  <form class="composer" id="composer">
+    <input id="input" placeholder="A bracket, 40 mm wide, holes 30 mm apart…" />
+    <button id="send" class="primary" type="submit">Send</button>
+  </form>
 </div>
 
 <script type="module">
@@ -151,36 +173,42 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 
 const container = document.getElementById('viewer');
 const scene = new THREE.Scene();
-scene.background = null;
-const camera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 0.1, 1000);
-camera.position.set(80,60,80);
+scene.background = new THREE.Color(0xddd6c8);
+const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+camera.position.set(80, 60, 80);
 let renderer = null;
-try { renderer = new THREE.WebGLRenderer({antialias:true, alpha:true}); } catch (e) { console.error('WebGL failed', e); }
+try { renderer = new THREE.WebGLRenderer({ antialias: true }); } catch (e) { console.error('WebGL failed', e); }
 if (!renderer) {
   const msg = document.createElement('div');
-  msg.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#b10026;font-size:14px;background:#ffffcc;';
-  msg.textContent = 'WebGL unavailable in this browser; 3D preview disabled.';
+  msg.className = 'viewer-note';
+  msg.textContent = 'WebGL unavailable in this browser. 3D preview disabled.';
   container.appendChild(msg);
 }
 if (renderer) {
   renderer.setSize(container.clientWidth, container.clientHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
-  container.appendChild(renderer.domElement);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setClearColor(0xddd6c8, 1);
+  container.insertBefore(renderer.domElement, container.firstChild);
 }
 const controls = renderer ? new OrbitControls(camera, renderer.domElement) : null;
 if (controls) controls.enableDamping = true;
-scene.add(new THREE.AmbientLight(0xffffff,0.6));
-const dir = new THREE.DirectionalLight(0xffffff,0.8); dir.position.set(50,80,50); scene.add(dir);
-const grid = new THREE.GridHelper(120,12,0xd9a06b,0xffeda0); scene.add(grid);
-const plate = new THREE.Mesh(new THREE.BoxGeometry(120,2,120), new THREE.MeshStandardMaterial({color:0xffeda0,roughness:0.9}));
-plate.position.y=-1; scene.add(plate);
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+dir.position.set(50, 80, 50);
+scene.add(dir);
+scene.add(new THREE.GridHelper(120, 12, 0xc4bcae, 0xc4bcae));
+const plate = new THREE.Mesh(
+  new THREE.BoxGeometry(120, 2, 120),
+  new THREE.MeshStandardMaterial({ color: 0xcfc6b6, roughness: 0.9 })
+);
+plate.position.y = -1;
+scene.add(plate);
 
 let currentMesh = null;
-const mat = new THREE.MeshStandardMaterial({color:0xfd8d3c, roughness:0.35, metalness:0.15});
+const mat = new THREE.MeshStandardMaterial({ color: 0x8d8274, roughness: 0.55, metalness: 0.05 });
 const loader = new STLLoader();
 
-function loadSTL(url) {
-  window.loadSTL = loadSTL;
+function loadSTL(url, replaceFixture) {
   if (currentMesh) { scene.remove(currentMesh); currentMesh.geometry.dispose(); }
   loader.load(url + '?t=' + Date.now(), (geom) => {
     geom.computeVertexNormals();
@@ -188,54 +216,90 @@ function loadSTL(url) {
     geom.computeBoundingBox();
     const c = geom.boundingBox.getCenter(new THREE.Vector3());
     m.position.sub(c);
-    m.position.y += (geom.boundingBox.max.y - geom.boundingBox.min.y)/2;
-    scene.add(m); currentMesh = m;
-    if (renderer) { const pv = document.getElementById('preview'); if (pv) pv.style.display = 'none'; }
+    m.position.y += (geom.boundingBox.max.y - geom.boundingBox.min.y) / 2;
+    scene.add(m);
+    currentMesh = m;
+    if (replaceFixture) {
+      const pv = document.getElementById('preview');
+      if (pv) pv.hidden = true;
+      const note = document.getElementById('viewerNote');
+      if (note) note.hidden = true;
+    }
     const size = geom.boundingBox.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x,size.y,size.z);
-    camera.position.set(maxDim*1.5, maxDim*1.2, maxDim*1.5);
-    controls.target.set(0, size.y/2, 0);
+    const maxDim = Math.max(size.x, size.y, size.z);
+    camera.position.set(maxDim * 1.6, maxDim * 1.2, maxDim * 1.6);
+    if (controls) controls.target.set(0, size.y / 2, 0);
   }, undefined, (err) => {
     console.error('STL load failed', err);
-    const b = new THREE.Mesh(new THREE.BoxGeometry(40,25,30), mat);
-    b.position.y=12.5; scene.add(b); currentMesh=b;
   });
 }
-// initial sample: 20mm calibration cube
-loadSTL('/fixtures/cube.stl');
+window.loadSTL = loadSTL;
+loadSTL('/fixtures/cube.stl', false);
 
-function animate(){ requestAnimationFrame(animate); if (renderer) { controls.update(); renderer.render(scene,camera); } }
-animate();
-window.addEventListener('resize', () => { if (renderer) renderer.setSize(container.clientWidth, container.clientHeight); camera.aspect = container.clientWidth/container.clientHeight; camera.updateProjectionMatrix(); });
+function frame() {
+  requestAnimationFrame(frame);
+  if (renderer) { controls.update(); renderer.render(scene, camera); }
+}
+frame();
+window.addEventListener('resize', () => {
+  if (renderer) renderer.setSize(container.clientWidth, container.clientHeight);
+  camera.aspect = container.clientWidth / container.clientHeight;
+  camera.updateProjectionMatrix();
+});
 
-// Camera refresh
-setInterval(() => { const img = document.getElementById('cam'); if (img) img.src = '/api/camera?t=' + Date.now(); }, 3000);
+const cam = document.getElementById('cam');
+const camNote = document.getElementById('camNote');
+let camState = 'unknown';
+cam.onerror = () => { camState = 'off'; cam.hidden = true; camNote.hidden = false; camNote.textContent = 'Camera unavailable.'; };
+cam.onload = () => { camState = 'on'; cam.hidden = false; camNote.hidden = true; };
 
-// Printer polling
+function refreshCamera(simulated) {
+  if (simulated) {
+    camState = 'sim';
+    cam.hidden = true;
+    camNote.hidden = false;
+    camNote.textContent = 'Simulated printer. No camera.';
+    return;
+  }
+  if (camState === 'sim') camState = 'unknown';
+  if (camState === 'off') return;
+  cam.src = '/api/camera?t=' + Date.now();
+}
+
 async function pollPrinter() {
   try {
-    const r = await fetch('/api/printer'); const d = await r.json();
-    document.getElementById('pSource').textContent = d.source || (d.simulated ? 'simulated' : 'octoprint');
+    const r = await fetch('/api/printer');
+    const d = await r.json();
+    const simulated = Boolean(d.simulated) || d.source === 'simulated';
+    document.getElementById('pSource').textContent = d.source || (simulated ? 'simulated' : 'octoprint');
     document.getElementById('pState').textContent = d.state || '—';
     document.getElementById('pHot').textContent = d.hotend ? (d.hotend.actual + ' / ' + d.hotend.target + ' °C') : '—';
     document.getElementById('pBed').textContent = d.bed ? (d.bed.actual + ' / ' + d.bed.target + ' °C') : '—';
     document.getElementById('pJob').textContent = d.job || '—';
     document.getElementById('pProgress').textContent = (d.progress != null) ? (Math.round(d.progress) + '%') : '—';
+    refreshCamera(simulated);
   } catch (e) { console.error(e); }
 }
-pollPrinter(); setInterval(pollPrinter, 3000);
+pollPrinter();
+setInterval(pollPrinter, 3000);
 
-// Revisions
+function renderRevisions(data) {
+  const el = document.getElementById('revList');
+  if (!Array.isArray(data) || data.length === 0) {
+    el.innerHTML = '<p class="empty">No revisions yet.</p>';
+    return;
+  }
+  el.innerHTML = data.map((rev, i) => {
+    const active = i === data.length - 1 ? ' active' : '';
+    const hash = (rev.source_hash || '').slice(0, 8);
+    return '<div class="rev' + active + '"><span>' + rev.id.slice(0, 12) + '</span><span class="hash">' + hash + '</span></div>';
+  }).join('');
+}
+
 async function loadRevisions() {
   try {
-    const r = await fetch('/api/revisions'); const data = await r.json();
-    const el = document.getElementById('revList');
-    if (!Array.isArray(data) || data.length === 0) { el.innerHTML = '<div class="rev">No revisions yet.</div>'; return; }
-    el.innerHTML = data.map((rev, i) => {
-      const active = i === data.length-1 ? ' active' : '';
-      const hash = (rev.source_hash||'').slice(0,8);
-      return '<div class="rev'+active+'"><span>'+rev.id.slice(0,12)+'</span><span class="badge">'+hash+'</span></div>';
-    }).join('');
+    const r = await fetch('/api/revisions');
+    renderRevisions(await r.json());
   } catch (e) { console.error(e); }
 }
 loadRevisions();
@@ -246,11 +310,10 @@ async function loadProject() {
     if (!r.ok) return;
     const d = await r.json();
     document.getElementById('projectName').textContent = d.name || 'Workshop';
-    const keep = document.getElementById('fitKeepList');
-    keep.textContent = (d.keep && d.keep.length) ? d.keep.join(', ') : '—';
+    document.getElementById('fitKeepList').textContent = (d.keep && d.keep.length) ? d.keep.join(', ') : '—';
     const list = document.getElementById('fitList');
     if (!d.fit || d.fit.length === 0) {
-      list.innerHTML = '<div class="rev">No fit notes yet. Record what you measured. The rest of the part stays.</div>';
+      list.innerHTML = '<p class="empty">No fit notes yet. Record what you measured. The rest of the part stays.</p>';
       return;
     }
     list.innerHTML = d.fit.map((note) => '<div class="rev"><span>' + note.note + '</span></div>').join('');
@@ -258,185 +321,140 @@ async function loadProject() {
 }
 loadProject();
 window.loadProject = loadProject;
+
 document.getElementById('fitBtn').onclick = async () => {
   const note = document.getElementById('fitNote').value.trim();
   const keepRaw = document.getElementById('fitKeep').value.replace(/^keep:\s*/i, '');
   const keep = keepRaw.split(',').map((s) => s.trim()).filter(Boolean);
   const res = await fetch('/api/fit', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({note, keep})
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note, keep })
   });
   const data = await res.json();
   if (!res.ok) {
-    document.getElementById('fitList').innerHTML = '<div class="rev">' + (data.detail || 'Could not record the fit') + '</div>';
+    document.getElementById('fitList').innerHTML = '<p class="empty">' + (data.detail || 'Could not record the fit') + '</p>';
     return;
   }
   document.getElementById('fitNote').value = '';
   loadProject();
 };
 
-// Chat
 const log = document.getElementById('log');
 const input = document.getElementById('input');
-const sendBtn = document.getElementById('send');
+function applyReply(data) {
+  if (data.tokens != null) document.getElementById('mTokens').textContent = data.tokens;
+  if (data.reasoning_tokens != null) document.getElementById('mReason').textContent = data.reasoning_tokens;
+  if (data.tool_calls != null) document.getElementById('mTools').textContent = data.tool_calls;
+  if (data.revisions != null) document.getElementById('mRevs').textContent = data.revisions;
+  if (data.mesh_bounds) {
+    const bnd = data.mesh_bounds;
+    const s = (bnd[1][0] - bnd[0][0]) + ' × ' + (bnd[1][1] - bnd[0][1]) + ' × ' + (bnd[1][2] - bnd[0][2]) + ' mm';
+    document.getElementById('mBounds').textContent = s;
+    document.getElementById('vBounds').textContent = s;
+  }
+  if (data.mesh) {
+    document.getElementById('vWat').textContent = data.mesh.watertight ? 'yes' : 'no';
+    document.getElementById('vComp').textContent = data.mesh.components;
+    document.getElementById('vVol').textContent = (data.mesh.volume_mm3 || 0).toFixed(1) + ' mm³';
+  }
+  if (data.slice_estimate) {
+    document.getElementById('sEst').textContent = data.slice_estimate;
+    document.getElementById('mSlice').textContent = data.slice_estimate;
+  }
+  if (data.preview_url) {
+    const pv = document.getElementById('preview');
+    if (pv) { pv.hidden = false; pv.src = data.preview_url + '?t=' + Date.now(); }
+  }
+  if (data.stl_url) loadSTL(data.stl_url, true);
+  loadRevisions();
+  loadProject();
+}
+
 async function send() {
   const v = input.value.trim();
   if (!v) return;
   input.value = '';
-  const u = document.createElement('div'); u.className='msg user'; u.textContent=v; log.appendChild(u);
-  const b = document.createElement('div'); b.className='msg'; b.textContent='CaliClaw is working…'; log.appendChild(b); log.scrollTop = log.scrollHeight;
+  const u = document.createElement('div');
+  u.className = 'msg user';
+  u.textContent = v;
+  log.appendChild(u);
+  const b = document.createElement('div');
+  b.className = 'msg';
+  b.textContent = 'CaliClaw is working…';
+  log.appendChild(b);
+  log.scrollTop = log.scrollHeight;
   try {
-    const res = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message:v})});
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: v })
+    });
     const text = await res.text();
-    let data; try { data = JSON.parse(text); } catch(_) { throw new Error('Bad JSON: ' + text.slice(0,200)); }
+    let data;
+    try { data = JSON.parse(text); } catch (_) { throw new Error('Bad JSON: ' + text.slice(0, 200)); }
     if (!res.ok) throw new Error((data && data.detail) || text);
-    b.textContent = (data.reply || 'No reply') + '\n\n[' + (data.tool_calls||0) + ' tool calls, ' + (data.tokens||'?') + ' tokens]';
-    if (data.tokens != null) document.getElementById('mTokens').textContent = data.tokens;
-    if (data.reasoning_tokens != null) document.getElementById('mReason').textContent = data.reasoning_tokens;
-    if (data.tool_calls != null) document.getElementById('mTools').textContent = data.tool_calls;
-    if (data.revisions != null) document.getElementById('mRevs').textContent = data.revisions;
-    if (data.mesh_bounds) {
-      const bnd = data.mesh_bounds;
-      document.getElementById('mBounds').textContent = (bnd[1][0]-bnd[0][0]) + ' × ' + (bnd[1][1]-bnd[0][1]) + ' × ' + (bnd[1][2]-bnd[0][2]) + ' mm';
-      document.getElementById('vBounds').textContent = (bnd[1][0]-bnd[0][0]) + ' × ' + (bnd[1][1]-bnd[0][1]) + ' × ' + (bnd[1][2]-bnd[0][2]) + ' mm';
-    }
-    if (data.mesh) {
-      document.getElementById('vWat').textContent = data.mesh.watertight ? 'yes' : 'no';
-      document.getElementById('vComp').textContent = data.mesh.components;
-      document.getElementById('vVol').textContent = (data.mesh.volume_mm3||0).toFixed(1) + ' mm³';
-    }
-    if (data.slice_estimate) { document.getElementById('sEst').textContent = data.slice_estimate; document.getElementById('mSlice').textContent = data.slice_estimate; }
-    if (data.stl_url) loadSTL(data.stl_url);
-    loadRevisions();
-    loadProject();
+    b.textContent = (data.reply || 'No reply') + '\n\n[' + (data.tool_calls || 0) + ' tool calls, ' + (data.tokens || '?') + ' tokens]';
+    applyReply(data);
   } catch (e) {
     b.textContent = 'Error: ' + e;
     console.error(e);
   }
   log.scrollTop = log.scrollHeight;
 }
-sendBtn.onclick = send;
-input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+document.getElementById('composer').addEventListener('submit', (e) => { e.preventDefault(); send(); });
 
-// Slice button
 document.getElementById('sliceBtn').onclick = async () => {
-  const res = await fetch('/api/slice', {method:'POST'});
+  const res = await fetch('/api/slice', { method: 'POST' });
   const data = await res.json();
   if (data.estimates && data.estimates.printing_time) {
     document.getElementById('sEst').textContent = data.estimates.printing_time;
     document.getElementById('mSlice').textContent = data.estimates.printing_time;
   }
 };
-// Simulated print
 document.getElementById('simulateBtn').onclick = async () => {
-  await fetch('/api/simulate/start', {method:'POST'});
+  await fetch('/api/simulate/start', { method: 'POST' });
   pollPrinter();
 };
-// OctoPrint controls
+document.getElementById('uploadBtn').onclick = () => {
+  const picker = document.createElement('input');
+  picker.type = 'file';
+  picker.accept = '.gcode,.gco,.g';
+  picker.onchange = async () => {
+    const file = picker.files && picker.files[0];
+    if (!file) return;
+    const body = new FormData();
+    body.append('file', file);
+    const res = await fetch('/api/printer/upload', { method: 'POST', body });
+    const data = await res.json().catch(() => ({}));
+    alert(res.ok ? 'Uploaded ' + file.name : (data.detail || 'Upload failed'));
+  };
+  picker.click();
+};
 document.getElementById('startBtn').onclick = async () => {
   if (!confirm('Start print on OctoPrint?')) return;
-  const res = await fetch('/api/printer/start', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({confirm:true})});
+  const res = await fetch('/api/printer/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true })
+  });
   const data = await res.json();
   alert(JSON.stringify(data));
   pollPrinter();
 };
 document.getElementById('pauseBtn').onclick = async () => {
-  await fetch('/api/printer/pause', {method:'POST'});
+  await fetch('/api/printer/pause', { method: 'POST' });
   pollPrinter();
 };
 document.getElementById('cancelBtn').onclick = async () => {
   if (!confirm('Cancel current job?')) return;
-  await fetch('/api/printer/cancel', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({confirm:true})});
+  await fetch('/api/printer/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true })
+  });
   pollPrinter();
 };
-</script>
-<script>
-(function(){
-  function ready(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
-  ready(function(){
-    var btn = document.getElementById('send');
-    var input = document.getElementById('input');
-    var log = document.getElementById('log');
-    if (!btn || !input || !log) { console.error('chat elements missing'); return; }
-    function append(role, body) {
-      var div = document.createElement('div'); div.className = 'msg ' + role;
-      var r = document.createElement('div'); r.className='role'; r.textContent = role==='user'?'You':'Assistant';
-      var b = document.createElement('div'); b.className='body'; b.textContent = body;
-      div.appendChild(r); div.appendChild(b);
-      log.appendChild(div); log.scrollTop = log.scrollHeight;
-      return b;
-    }
-    async function send() {
-      var msg = input.value.trim();
-      if (!msg) return;
-      input.value = '';
-      append('user', msg);
-      var bb = append('assistant', 'CaliClaw is working…');
-      try {
-        var res = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message: msg})});
-        var text = await res.text();
-        var data; try { data = JSON.parse(text); } catch (_) { throw new Error('Bad JSON: ' + text.slice(0,200)); }
-        if (!res.ok) throw new Error((data && data.detail) || text);
-        bb.textContent = (data.reply || 'No reply') + '\n\n[' + (data.tool_calls||0) + ' tool calls, ' + (data.tokens||'?') + ' tokens]';
-        if (data.tokens != null) document.getElementById('mTokens').textContent = data.tokens;
-        if (data.reasoning_tokens != null) document.getElementById('mReason').textContent = data.reasoning_tokens;
-        if (data.tool_calls != null) document.getElementById('mTools').textContent = data.tool_calls;
-        if (data.revisions != null) document.getElementById('mRevs').textContent = data.revisions;
-        if (data.mesh_bounds) {
-          var bnd = data.mesh_bounds;
-          var s = (bnd[1][0]-bnd[0][0]) + ' x ' + (bnd[1][1]-bnd[0][1]) + ' x ' + (bnd[1][2]-bnd[0][2]) + ' mm';
-          document.getElementById('mBounds').textContent = s;
-          document.getElementById('vBounds').textContent = s;
-        }
-        if (data.mesh) {
-          document.getElementById('vWat').textContent = data.mesh.watertight ? 'yes' : 'no';
-          document.getElementById('vComp').textContent = data.mesh.components;
-          document.getElementById('vVol').textContent = (data.mesh.volume_mm3||0).toFixed(1) + ' mm³';
-        }
-        if (data.slice_estimate) { document.getElementById('sEst').textContent = data.slice_estimate; document.getElementById('mSlice').textContent = data.slice_estimate; }
-        if (data.preview_url) {
-          const pv = document.getElementById('preview');
-          if (pv) pv.src = data.preview_url + '?t=' + Date.now();
-        }
-        if (data.stl_url) {
-          if (window.loadSTL) window.loadSTL(data.stl_url);
-        }
-        if (window.loadProject) window.loadProject();
-        // refresh revisions
-        fetch('/api/revisions').then(r=>r.json()).then(list => {
-          var el = document.getElementById('revList');
-          if (!Array.isArray(list) || list.length === 0) { el.innerHTML = '<div class="rev">No revisions yet.</div>'; return; }
-          el.innerHTML = list.map((rev,i) => {
-            var active = i === list.length-1 ? ' active' : '';
-            var hash = (rev.source_hash||'').slice(0,8);
-            return '<div class="rev'+active+'"><span>'+rev.id.slice(0,12)+'</span><span class="badge">'+hash+'</span></div>';
-          }).join('');
-        }).catch(()=>{});
-      } catch (e) {
-        bb.textContent = 'Error: ' + e;
-        console.error(e);
-      }
-      log.scrollTop = log.scrollHeight;
-    }
-    btn.onclick = send;
-    input.onkeydown = function(e){ if (e.key === 'Enter') { e.preventDefault(); send(); } };
-    // polling
-    async function pollPrinter() {
-      try {
-        const r = await fetch('/api/printer'); const d = await r.json();
-        document.getElementById('pSource').textContent = d.source || (d.simulated ? 'simulated' : 'octoprint');
-        document.getElementById('pState').textContent = d.state || '—';
-        document.getElementById('pHot').textContent = d.hotend ? (d.hotend.actual + ' / ' + d.hotend.target + ' °C') : '—';
-        document.getElementById('pBed').textContent = d.bed ? (d.bed.actual + ' / ' + d.bed.target + ' °C') : '—';
-        document.getElementById('pJob').textContent = d.job || '—';
-        document.getElementById('pProgress').textContent = (d.progress != null) ? (Math.round(d.progress) + '%') : '—';
-      } catch (e) { console.error(e); }
-    }
-    pollPrinter(); setInterval(pollPrinter, 3000);
-    setInterval(() => { const img = document.getElementById('cam'); if (img) img.src = '/api/camera?t=' + Date.now(); }, 3000);
-  });
-})();
 </script>
 </body>
 </html>

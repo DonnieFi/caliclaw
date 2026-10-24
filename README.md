@@ -1,11 +1,11 @@
 # CaliClaw
 
 <p align="center">
-  <img src="mascot/pocket-caliclaw.png" alt="Pocket CaliClaw, front and rear, rendered from the STL. A small red block-bodied claw with square eyes, one raised arm, and a stepped tail." width="880">
+  <img src="mascot/workshop-hero.jpg" alt="A printing-bench poster. Pocket CaliClaw faces forward, square eyes and a raised claw, with the stepped tail behind him." width="880">
 </p>
 
 <p align="center">
-  Pocket CaliClaw, the workshop mascot.<br>
+  Pocket CaliClaw on the bench. The staircase is the tail, and it sits on the back.<br>
   <a href="https://www.thingiverse.com/thing:7424671">Thingiverse 7424671</a>
   · 36 × 38 × 29 mm
 </p>
@@ -26,7 +26,11 @@ The browser is the bench. OpenClaw opens the same project through the `caliclaw`
 
 ## Print the mascot
 
-[Pocket CaliClaw](https://www.thingiverse.com/thing:7424671) is the calibration print for this shop: a compact claw, small enough to finish while you watch the first layers. It is an independent OpenClaw-inspired fan project, not an official model. The picture above is rendered from the STL in this repo.
+[Pocket CaliClaw](https://www.thingiverse.com/thing:7424671) is the calibration print for this shop: a compact claw, small enough to finish while you watch the first layers. It is an independent OpenClaw-inspired fan project, not an official model. The opening picture is a generated poster. This one is the real STL: the face is the flat front, and the steps are the tail on the back.
+
+<p align="center">
+  <img src="mascot/pocket-caliclaw.png" alt="Pocket CaliClaw mesh, same scale. Front shows the face. Rear shows the stepped tail." width="720">
+</p>
 
 | | |
 |---|---|
