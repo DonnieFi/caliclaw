@@ -1,6 +1,33 @@
+# Private planning, imported conversations, and local notes.
+docs/
 
-# Beads / Dolt files (added by bd init)
-.dolt/
+# Secrets and local runtime
+.env
+.env.*
+!.env.example
 *.db
+*.sqlite
+artifacts/
+logs/
+
+# Generated evaluation output
+eval/results/
+
+# Local issue export. The Beads database stays on this machine.
+.beads/issues.jsonl
+.beads/interactions.jsonl
+
+# Tool and agent caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+node_modules/
+.aws/
+.agents/
+.codex/
+
+# Beads / Dolt
+.dolt/
 .beads-credential-key
 .beads/proxieddb/

@@ -1,0 +1,27 @@
+{
+  "id": "caliclaw",
+  "name": "CaliClaw",
+  "description": "3D printing workbench for OpenClaw: measured parts, checked meshes, reviewed slices, and explicit printer control.",
+  "skills": ["./skills"],
+  "categories": ["productivity"],
+  "enabledByDefault": false,
+  "activation": {
+    "onStartup": true
+  },
+  "uiHints": {
+    "baseUrl": {
+      "label": "Workbench URL",
+      "help": "Local CaliClaw webapp. The agent calls this API. It does not receive a printer API key."
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "default": "http://127.0.0.1:8000"
+      }
+    }
+  }
+}

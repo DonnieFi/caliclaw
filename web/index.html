@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CaliClaw — printer workbench</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+  :root {
+    --c0:#ffffcc; --c1:#ffeda0; --c2:#feb24c; --c3:#fd8d3c; --c4:#fc4e2a; --c5:#b10026;
+    --bg:#ffffcc; --panel:#ffeda0; --ink:#2a1208; --muted:#7a2e1a; --rule:#d9a06b; --accent:#fd8d3c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--ink); font-family:"Helvetica Neue",Helvetica,Arial,sans-serif; }
+  body { display:grid; grid-template-columns: 60% 40%; grid-template-rows: 56px 1fr; }
+  header { grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; padding:0 20px; border-bottom:2px solid var(--c5); background:var(--c1); }
+  header .brand { font-family:Georgia,serif; font-size:22px; font-weight:700; color:var(--c5); }
+  header .brand small { font-size:11px; color:var(--muted); margin-left:10px; text-transform:uppercase; letter-spacing:.12em; }
+  header .meta { font-size:12px; color:var(--muted); }
+  #viewer { position:relative; background:linear-gradient(135deg,#fffbe6,#ffeda0); overflow:hidden; }
+  #viewer canvas { display:block; width:100%; height:100%; position:absolute; top:0; left:0; z-index:2; background:transparent; }
+  .viewer-badge { position:absolute; top:12px; left:12px; padding:4px 8px; background:var(--c5); color:var(--c0); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border-radius:2px; }
+  .viewer-note { position:absolute; bottom:12px; left:12px; right:12px; font-size:11px; color:var(--muted); background:rgba(255,255,204,.9); padding:6px 10px; border-left:3px solid var(--c4); }
+  .panel { display:flex; flex-direction:column; background:var(--panel); border-left:1px solid var(--rule); overflow:hidden; }
+  .panel-scroll { flex:1; overflow:auto; padding:0 16px 16px; }
+  .section { padding:12px 0; border-bottom:1px solid var(--rule); }
+  .section:last-child { border-bottom:none; }
+  .section h3 { margin:0 0 8px; font-family:Georgia,serif; font-size:13px; text-transform:uppercase; letter-spacing:.12em; color:var(--c5); font-weight:700; }
+  .row { display:flex; gap:8px; align-items:center; margin:6px 0; flex-wrap:wrap; }
+  label { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  select, button, input { background:#fffbe6; color:var(--ink); border:1px solid var(--rule); border-radius:2px; padding:6px 8px; font-size:13px; }
+  button { cursor:pointer; }
+  button.primary { background:var(--c4); color:#fff; border:none; font-weight:600; }
+  .metric { display:flex; justify-content:space-between; font-size:13px; margin:4px 0; }
+  .metric span:first-child { color:var(--muted); }
+  .kpi-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:6px 0; }
+  .kpi { background:#fffbe6; border:1px solid var(--rule); padding:6px 8px; border-radius:2px; }
+  .kpi .l { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  .kpi .v { font-size:16px; font-weight:700; color:var(--c5); font-variant-numeric:tabular-nums; }
+  .badge { font-size:11px; padding:2px 6px; border-radius:999px; background:var(--c4); color:#fff; }
+  .rev { font-size:12px; padding:4px 6px; border-radius:2px; background:#fffbe6; margin:2px 0; display:flex; justify-content:space-between; border:1px solid var(--rule); }
+  .rev.active { border-color:var(--c5); background:var(--c2); }
+  .msg { margin:6px 0; padding:8px; border-radius:2px; background:#fffbe6; border:1px solid var(--rule); }
+  .msg.user { background:var(--c2); }
+  .chat-log { max-height:260px; overflow:auto; padding:4px; }
+  .chat-input { display:flex; gap:6px; }
+  .chat-input input { flex:1; }
+  @media (max-width: 900px) { body { grid-template-columns:1fr; grid-template-rows:56px 50vh 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">CaliClaw <small>OpenClaw printing workbench</small></div>
+  <div class="meta">Single-part · Ender-3 / Klipper · OctoPrint</div>
+</header>
+<div id="viewer">
+  <canvas id="c" width="800" height="600"></canvas>
+  <img id="preview" src="/fixtures/cube.png" alt="preview" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fffbe6;z-index:1;" />
+  <div class="viewer-badge">Live preview</div>
+  <div class="viewer-note">Sample fixture shown until a build succeeds. Generated STL replaces it automatically.</div>
+</div>
+<div class="panel">
+  <div class="panel-scroll">
+    <div class="section">
+      <h3>Project</h3>
+      <div class="row"><strong>Bracket workbench</strong><span class="badge">single part</span></div>
+      <div class="row">
+        <label>Model</label>
+        <select id="model"><option>Configured model</option><option>Comparison model</option></select>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Printer (live)</h3>
+      <div class="metric"><span>Source</span><span id="pSource">—</span></div>
+      <div class="metric"><span>State</span><span id="pState">—</span></div>
+      <div class="metric"><span>Hotend</span><span id="pHot">—</span></div>
+      <div class="metric"><span>Bed</span><span id="pBed">—</span></div>
+      <div class="metric"><span>Job</span><span id="pJob">—</span></div>
+      <div class="metric"><span>Progress</span><span id="pProgress">—</span></div>
+    </div>
+
+    <div class="section">
+      <h3>OctoPrint camera</h3>
+      <img id="cam" src="/api/camera" alt="OctoPrint camera" style="width:100%; height:140px; object-fit:cover; border:1px solid var(--rule); margin-bottom:8px;" />
+      <div class="row">
+        <button id="uploadBtn">Upload</button>
+        <button id="startBtn" class="primary">Start</button>
+        <button id="pauseBtn">Pause</button>
+        <button id="cancelBtn">Cancel</button>
+      </div>
+      <div style="font-size:10px; color:var(--muted); margin-top:4px;">Controls require explicit intent and a checked artifact.</div>
+    </div>
+
+    <div class="section">
+      <h3>Validation</h3>
+      <div class="metric"><span>Watertight</span><span id="vWat">—</span></div>
+      <div class="metric"><span>Components</span><span id="vComp">—</span></div>
+      <div class="metric"><span>Bounds</span><span id="vBounds">—</span></div>
+      <div class="metric"><span>Volume</span><span id="vVol">—</span></div>
+    </div>
+
+    <div class="section">
+      <h3>Orientation &amp; slicing</h3>
+      <div class="metric"><span>Profile</span><span>ender3-proven-pla</span></div>
+      <div class="metric"><span>Est. time</span><span id="sEst">—</span></div>
+      <div class="row"><button id="sliceBtn">Prepare slice</button><button id="simulateBtn">Simulated print</button></div>
+    </div>
+
+    <div class="section">
+      <h3>Revisions</h3>
+      <div id="revList"><div class="rev">No revisions yet.</div></div>
+    </div>
+
+    <div class="section">
+      <h3>Metrics</h3>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="l">Tokens</div><div class="v" id="mTokens">—</div></div>
+        <div class="kpi"><div class="l">Reasoning</div><div class="v" id="mReason">—</div></div>
+        <div class="kpi"><div class="l">Tool calls</div><div class="v" id="mTools">—</div></div>
+        <div class="kpi"><div class="l">Revisions</div><div class="v" id="mRevs">—</div></div>
+      </div>
+      <div class="metric"><span>Bounds</span><span id="mBounds">—</span></div>
+      <div class="metric"><span>Slice est.</span><span id="mSlice">—</span></div>
+    </div>
+
+    <div class="section">
+      <h3>Chat</h3>
+      <div class="chat-log" id="log">
+        <div class="msg">CaliClaw ready. Ask for a measured part or a diagnosis.</div>
+      </div>
+      <div class="chat-input">
+        <input id="input" placeholder="Type a request…" />
+        <button id="send" class="primary">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+
+const container = document.getElementById('viewer');
+const scene = new THREE.Scene();
+scene.background = null;
+const camera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 0.1, 1000);
+camera.position.set(80,60,80);
+let renderer = null;
+try { renderer = new THREE.WebGLRenderer({antialias:true, alpha:true}); } catch (e) { console.error('WebGL failed', e); }
+if (!renderer) {
+  const msg = document.createElement('div');
+  msg.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#b10026;font-size:14px;background:#ffffcc;';
+  msg.textContent = 'WebGL unavailable in this browser; 3D preview disabled.';
+  container.appendChild(msg);
+}
+if (renderer) {
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  container.appendChild(renderer.domElement);
+}
+const controls = renderer ? new OrbitControls(camera, renderer.domElement) : null;
+if (controls) controls.enableDamping = true;
+scene.add(new THREE.AmbientLight(0xffffff,0.6));
+const dir = new THREE.DirectionalLight(0xffffff,0.8); dir.position.set(50,80,50); scene.add(dir);
+const grid = new THREE.GridHelper(120,12,0xd9a06b,0xffeda0); scene.add(grid);
+const plate = new THREE.Mesh(new THREE.BoxGeometry(120,2,120), new THREE.MeshStandardMaterial({color:0xffeda0,roughness:0.9}));
+plate.position.y=-1; scene.add(plate);
+
+let currentMesh = null;
+const mat = new THREE.MeshStandardMaterial({color:0xfd8d3c, roughness:0.35, metalness:0.15});
+const loader = new STLLoader();
+
+function loadSTL(url) {
+  window.loadSTL = loadSTL;
+  if (currentMesh) { scene.remove(currentMesh); currentMesh.geometry.dispose(); }
+  loader.load(url + '?t=' + Date.now(), (geom) => {
+    geom.computeVertexNormals();
+    const m = new THREE.Mesh(geom, mat);
+    geom.computeBoundingBox();
+    const c = geom.boundingBox.getCenter(new THREE.Vector3());
+    m.position.sub(c);
+    m.position.y += (geom.boundingBox.max.y - geom.boundingBox.min.y)/2;
+    scene.add(m); currentMesh = m;
+    if (renderer) { const pv = document.getElementById('preview'); if (pv) pv.style.display = 'none'; }
+    const size = geom.boundingBox.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x,size.y,size.z);
+    camera.position.set(maxDim*1.5, maxDim*1.2, maxDim*1.5);
+    controls.target.set(0, size.y/2, 0);
+  }, undefined, (err) => {
+    console.error('STL load failed', err);
+    const b = new THREE.Mesh(new THREE.BoxGeometry(40,25,30), mat);
+    b.position.y=12.5; scene.add(b); currentMesh=b;
+  });
+}
+// initial sample: 20mm calibration cube
+loadSTL('/fixtures/cube.stl');
+
+function animate(){ requestAnimationFrame(animate); if (renderer) { controls.update(); renderer.render(scene,camera); } }
+animate();
+window.addEventListener('resize', () => { if (renderer) renderer.setSize(container.clientWidth, container.clientHeight); camera.aspect = container.clientWidth/container.clientHeight; camera.updateProjectionMatrix(); });
+
+// Camera refresh
+setInterval(() => { const img = document.getElementById('cam'); if (img) img.src = '/api/camera?t=' + Date.now(); }, 3000);
+
+// Printer polling
+async function pollPrinter() {
+  try {
+    const r = await fetch('/api/printer'); const d = await r.json();
+    document.getElementById('pSource').textContent = d.source || (d.simulated ? 'simulated' : 'octoprint');
+    document.getElementById('pState').textContent = d.state || '—';
+    document.getElementById('pHot').textContent = d.hotend ? (d.hotend.actual + ' / ' + d.hotend.target + ' °C') : '—';
+    document.getElementById('pBed').textContent = d.bed ? (d.bed.actual + ' / ' + d.bed.target + ' °C') : '—';
+    document.getElementById('pJob').textContent = d.job || '—';
+    document.getElementById('pProgress').textContent = (d.progress != null) ? (Math.round(d.progress) + '%') : '—';
+  } catch (e) { console.error(e); }
+}
+pollPrinter(); setInterval(pollPrinter, 3000);
+
+// Revisions
+async function loadRevisions() {
+  try {
+    const r = await fetch('/api/revisions'); const data = await r.json();
+    const el = document.getElementById('revList');
+    if (!Array.isArray(data) || data.length === 0) { el.innerHTML = '<div class="rev">No revisions yet.</div>'; return; }
+    el.innerHTML = data.map((rev, i) => {
+      const active = i === data.length-1 ? ' active' : '';
+      const hash = (rev.source_hash||'').slice(0,8);
+      return '<div class="rev'+active+'"><span>'+rev.id.slice(0,12)+'</span><span class="badge">'+hash+'</span></div>';
+    }).join('');
+  } catch (e) { console.error(e); }
+}
+loadRevisions();
+
+// Chat
+const log = document.getElementById('log');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('send');
+async function send() {
+  const v = input.value.trim();
+  if (!v) return;
+  input.value = '';
+  const u = document.createElement('div'); u.className='msg user'; u.textContent=v; log.appendChild(u);
+  const b = document.createElement('div'); b.className='msg'; b.textContent='CaliClaw is working…'; log.appendChild(b); log.scrollTop = log.scrollHeight;
+  try {
+    const res = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message:v})});
+    const text = await res.text();
+    let data; try { data = JSON.parse(text); } catch(_) { throw new Error('Bad JSON: ' + text.slice(0,200)); }
+    if (!res.ok) throw new Error((data && data.detail) || text);
+    b.textContent = (data.reply || 'No reply') + '\n\n[' + (data.tool_calls||0) + ' tool calls, ' + (data.tokens||'?') + ' tokens]';
+    if (data.tokens != null) document.getElementById('mTokens').textContent = data.tokens;
+    if (data.reasoning_tokens != null) document.getElementById('mReason').textContent = data.reasoning_tokens;
+    if (data.tool_calls != null) document.getElementById('mTools').textContent = data.tool_calls;
+    if (data.revisions != null) document.getElementById('mRevs').textContent = data.revisions;
+    if (data.mesh_bounds) {
+      const bnd = data.mesh_bounds;
+      document.getElementById('mBounds').textContent = (bnd[1][0]-bnd[0][0]) + ' × ' + (bnd[1][1]-bnd[0][1]) + ' × ' + (bnd[1][2]-bnd[0][2]) + ' mm';
+      document.getElementById('vBounds').textContent = (bnd[1][0]-bnd[0][0]) + ' × ' + (bnd[1][1]-bnd[0][1]) + ' × ' + (bnd[1][2]-bnd[0][2]) + ' mm';
+    }
+    if (data.mesh) {
+      document.getElementById('vWat').textContent = data.mesh.watertight ? 'yes' : 'no';
+      document.getElementById('vComp').textContent = data.mesh.components;
+      document.getElementById('vVol').textContent = (data.mesh.volume_mm3||0).toFixed(1) + ' mm³';
+    }
+    if (data.slice_estimate) { document.getElementById('sEst').textContent = data.slice_estimate; document.getElementById('mSlice').textContent = data.slice_estimate; }
+    if (data.stl_url) loadSTL(data.stl_url);
+    loadRevisions();
+  } catch (e) {
+    b.textContent = 'Error: ' + e;
+    console.error(e);
+  }
+  log.scrollTop = log.scrollHeight;
+}
+sendBtn.onclick = send;
+input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+
+// Slice button
+document.getElementById('sliceBtn').onclick = async () => {
+  const res = await fetch('/api/slice', {method:'POST'});
+  const data = await res.json();
+  if (data.estimates && data.estimates.printing_time) {
+    document.getElementById('sEst').textContent = data.estimates.printing_time;
+    document.getElementById('mSlice').textContent = data.estimates.printing_time;
+  }
+};
+// Simulated print
+document.getElementById('simulateBtn').onclick = async () => {
+  await fetch('/api/simulate/start', {method:'POST'});
+  pollPrinter();
+};
+// OctoPrint controls
+document.getElementById('startBtn').onclick = async () => {
+  if (!confirm('Start print on OctoPrint?')) return;
+  const res = await fetch('/api/printer/start', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({confirm:true})});
+  const data = await res.json();
+  alert(JSON.stringify(data));
+  pollPrinter();
+};
+document.getElementById('pauseBtn').onclick = async () => {
+  await fetch('/api/printer/pause', {method:'POST'});
+  pollPrinter();
+};
+document.getElementById('cancelBtn').onclick = async () => {
+  if (!confirm('Cancel current job?')) return;
+  await fetch('/api/printer/cancel', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({confirm:true})});
+  pollPrinter();
+};
+</script>
+<script>
+(function(){
+  function ready(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
+  ready(function(){
+    var btn = document.getElementById('send');
+    var input = document.getElementById('input');
+    var log = document.getElementById('log');
+    if (!btn || !input || !log) { console.error('chat elements missing'); return; }
+    function append(role, body) {
+      var div = document.createElement('div'); div.className = 'msg ' + role;
+      var r = document.createElement('div'); r.className='role'; r.textContent = role==='user'?'You':'Assistant';
+      var b = document.createElement('div'); b.className='body'; b.textContent = body;
+      div.appendChild(r); div.appendChild(b);
+      log.appendChild(div); log.scrollTop = log.scrollHeight;
+      return b;
+    }
+    async function send() {
+      var msg = input.value.trim();
+      if (!msg) return;
+      input.value = '';
+      append('user', msg);
+      var bb = append('assistant', 'CaliClaw is working…');
+      try {
+        var res = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message: msg})});
+        var text = await res.text();
+        var data; try { data = JSON.parse(text); } catch (_) { throw new Error('Bad JSON: ' + text.slice(0,200)); }
+        if (!res.ok) throw new Error((data && data.detail) || text);
+        bb.textContent = (data.reply || 'No reply') + '\n\n[' + (data.tool_calls||0) + ' tool calls, ' + (data.tokens||'?') + ' tokens]';
+        if (data.tokens != null) document.getElementById('mTokens').textContent = data.tokens;
+        if (data.reasoning_tokens != null) document.getElementById('mReason').textContent = data.reasoning_tokens;
+        if (data.tool_calls != null) document.getElementById('mTools').textContent = data.tool_calls;
+        if (data.revisions != null) document.getElementById('mRevs').textContent = data.revisions;
+        if (data.mesh_bounds) {
+          var bnd = data.mesh_bounds;
+          var s = (bnd[1][0]-bnd[0][0]) + ' x ' + (bnd[1][1]-bnd[0][1]) + ' x ' + (bnd[1][2]-bnd[0][2]) + ' mm';
+          document.getElementById('mBounds').textContent = s;
+          document.getElementById('vBounds').textContent = s;
+        }
+        if (data.mesh) {
+          document.getElementById('vWat').textContent = data.mesh.watertight ? 'yes' : 'no';
+          document.getElementById('vComp').textContent = data.mesh.components;
+          document.getElementById('vVol').textContent = (data.mesh.volume_mm3||0).toFixed(1) + ' mm³';
+        }
+        if (data.slice_estimate) { document.getElementById('sEst').textContent = data.slice_estimate; document.getElementById('mSlice').textContent = data.slice_estimate; }
+        if (data.preview_url) {
+          const pv = document.getElementById('preview');
+          if (pv) pv.src = data.preview_url + '?t=' + Date.now();
+        }
+        if (data.stl_url) {
+          if (window.loadSTL) window.loadSTL(data.stl_url);
+        }
+        // refresh revisions
+        fetch('/api/revisions').then(r=>r.json()).then(list => {
+          var el = document.getElementById('revList');
+          if (!Array.isArray(list) || list.length === 0) { el.innerHTML = '<div class="rev">No revisions yet.</div>'; return; }
+          el.innerHTML = list.map((rev,i) => {
+            var active = i === list.length-1 ? ' active' : '';
+            var hash = (rev.source_hash||'').slice(0,8);
+            return '<div class="rev'+active+'"><span>'+rev.id.slice(0,12)+'</span><span class="badge">'+hash+'</span></div>';
+          }).join('');
+        }).catch(()=>{});
+      } catch (e) {
+        bb.textContent = 'Error: ' + e;
+        console.error(e);
+      }
+      log.scrollTop = log.scrollHeight;
+    }
+    btn.onclick = send;
+    input.onkeydown = function(e){ if (e.key === 'Enter') { e.preventDefault(); send(); } };
+    // polling
+    async function pollPrinter() {
+      try {
+        const r = await fetch('/api/printer'); const d = await r.json();
+        document.getElementById('pSource').textContent = d.source || (d.simulated ? 'simulated' : 'octoprint');
+        document.getElementById('pState').textContent = d.state || '—';
+        document.getElementById('pHot').textContent = d.hotend ? (d.hotend.actual + ' / ' + d.hotend.target + ' °C') : '—';
+        document.getElementById('pBed').textContent = d.bed ? (d.bed.actual + ' / ' + d.bed.target + ' °C') : '—';
+        document.getElementById('pJob').textContent = d.job || '—';
+        document.getElementById('pProgress').textContent = (d.progress != null) ? (Math.round(d.progress) + '%') : '—';
+      } catch (e) { console.error(e); }
+    }
+    pollPrinter(); setInterval(pollPrinter, 3000);
+    setInterval(() => { const img = document.getElementById('cam'); if (img) img.src = '/api/camera?t=' + Date.now(); }, 3000);
+  });
+})();
+</script>
+</body>
+</html>

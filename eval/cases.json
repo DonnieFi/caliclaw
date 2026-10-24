@@ -1,0 +1,110 @@
+{
+  "version": "0.1.0",
+  "created": "2026-10-22",
+  "description": "CaliClaw frozen evaluation cases. Synthetic fixtures only; no personal data.",
+  "cases": [
+    {
+      "id": "log-001",
+      "category": "logs",
+      "title": "Thermal runaway in Pi log",
+      "input": "OctoPrint serial log excerpt with 'Thermal Runaway' and a rising bed temperature.",
+      "source": "synthetic fixture: eval/fixtures/log-001.txt",
+      "expected": "Identify thermal runaway as the planted cause; cite the log line; propose checking heater wiring and PID before reprinting.",
+      "failure_category": "none",
+      "grader": "substring and citation check"
+    },
+    {
+      "id": "log-002",
+      "category": "logs",
+      "title": "Stale log with no new evidence",
+      "input": "OctoPrint serial log unchanged since previous run.",
+      "source": "synthetic fixture: eval/fixtures/log-002.txt",
+      "expected": "Report insufficient new evidence; do not repeat a stale diagnosis.",
+      "failure_category": "insufficient_evidence",
+      "grader": "no duplicate diagnosis"
+    },
+    {
+      "id": "fw-001",
+      "category": "firmware",
+      "title": "Klipper pressure advance value",
+      "input": "Firmware output showing pressure_advance: 0.05.",
+      "source": "synthetic fixture: eval/fixtures/fw-001.txt",
+      "expected": "Report observed setting 0.05; distinguish observed from inferred; no machine state claim beyond evidence.",
+      "failure_category": "none",
+      "grader": "value extraction"
+    },
+    {
+      "id": "fw-002",
+      "category": "firmware",
+      "title": "Missing MCU state",
+      "input": "Partial Klipper status with MCU disconnected.",
+      "source": "synthetic fixture: eval/fixtures/fw-002.txt",
+      "expected": "State that MCU state is unavailable; propose reconnect check.",
+      "failure_category": "insufficient_evidence",
+      "grader": "uncertainty marker"
+    },
+    {
+      "id": "cad-001",
+      "category": "cad",
+      "title": "Bracket with two mounting holes",
+      "input": "Create a 40x25x30 mm bracket with 5 mm holes spaced 20 mm apart.",
+      "source": "fixtures/bracket.scad",
+      "expected": "STL compiles, watertight, one component, bounds 40x25x30 mm, volume > 0.",
+      "tolerances": {"bounds_mm": 0.5, "volume_min_mm3": 1000},
+      "preserved_dimensions": [],
+      "grader": "geometry assertions in backend/app/geometry.py",
+      "failure_category": "none"
+    },
+    {
+      "id": "cad-002",
+      "category": "cad",
+      "title": "Invalid geometry rejected",
+      "input": "Degenerate slab with zero thickness.",
+      "source": "synthetic SCAD",
+      "expected": "Build fails or volume <= 0; no false success.",
+      "grader": "worker failure",
+      "failure_category": "invalid_geometry"
+    },
+    {
+      "id": "rev-001",
+      "category": "revision",
+      "title": "Constrained revision preserves hole spacing",
+      "input": "Increase bracket height to 40 mm while preserving hole spacing 20 mm.",
+      "source": "fixtures/bracket.scad",
+      "expected": "New revision created with parent link; protected dimension hole_spacing remains 20 mm; independent geometry check passes.",
+      "preserved_dimensions": ["hole_spacing"],
+      "grader": "revision parent + params",
+      "failure_category": "none"
+    },
+    {
+      "id": "rev-002",
+      "category": "revision",
+      "title": "Restore previous revision",
+      "input": "Restore the original bracket revision.",
+      "source": "fixtures/bracket.scad",
+      "expected": "Restore creates a new revision linked to original; history preserved.",
+      "grader": "revision chain",
+      "failure_category": "none"
+    },
+    {
+      "id": "slice-001",
+      "category": "slicing",
+      "title": "Slice with pinned profile",
+      "input": "Slice the checked bracket STL with ender3-proven-pla profile.",
+      "source": "fixtures/bracket.scad + profiles/ender3-proven-pla.ini",
+      "expected": "Nonempty G-code; profile hash recorded; estimates present.",
+      "grader": "gcode nonempty + hash",
+      "failure_category": "none"
+    },
+    {
+      "id": "slice-002",
+      "category": "slicing",
+      "title": "Stale slice invalidated",
+      "input": "Change model revision after slicing.",
+      "source": "synthetic",
+      "expected": "Old slice marked stale; no silent reuse.",
+      "grader": "provenance mismatch",
+      "failure_category": "stale_slice"
+    }
+  ]
+}
