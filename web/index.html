@@ -483,7 +483,7 @@
         <button type="button" id="pauseBtn">Pause</button>
         <button type="button" id="cancelBtn">Cancel</button>
       </div>
-      <button type="button" class="ghost wide" id="uploadBtn">Upload gcode</button>
+      <button type="button" class="ghost wide" id="uploadBtn">Upload reviewed slice</button>
       <button type="button" class="ghost wide" id="simulateBtn" hidden>Play a simulated job</button>
     </div>
   </section>
@@ -608,11 +608,17 @@ function targetNumber(block, flat) {
 }
 
 let resumeMode = false;
+let preparation = {};
+let selectedJob = "";
 async function pollPrinter() {
   try {
     const res = await fetch('/api/printer');
     const data = await res.json();
     const simulated = Boolean(data.simulated) || String(data.source || '').indexOf('simulated') === 0;
+    if (!res.ok) throw new Error('Printer status unavailable');
+    const prepRes = await fetch('/api/printer/preparation');
+    preparation = prepRes.ok ? await prepRes.json() : {};
+    selectedJob = data.job || '';
     const state = data.state || '—';
     const kind = /print/i.test(state) ? 'printing' : /pause/i.test(state) ? 'paused' : /error|disconnect|stale/i.test(state) ? 'bad' : 'idle';
     paintState(document.getElementById('pState'), state, kind);
@@ -655,10 +661,19 @@ async function pollPrinter() {
       control.disabled = simulated;
       control.title = simulated ? 'Simulated printer. This does not move the machine.' : '';
     }
+    const active = Boolean(data.flags && (data.flags.printing || data.flags.paused));
+    const idle = !simulated && Boolean(data.flags && data.flags.operational) && !active;
+    document.getElementById('startBtn').disabled = !idle || !preparation.ready || selectedJob !== preparation.filename;
+    document.getElementById('uploadBtn').disabled = !idle;
+    document.getElementById('pauseBtn').disabled = simulated || !active;
+    document.getElementById('cancelBtn').disabled = simulated || !active;
+    document.getElementById('startBtn').title = preparation.reason || 'Review and upload a slice first';
     document.getElementById('simulateBtn').hidden = !simulated;
     refreshCamera();
   } catch (err) {
-    console.error(err);
+    preparation = {};
+    for (const id of ['startBtn', 'pauseBtn', 'cancelBtn', 'uploadBtn', 'toolBtn', 'bedBtn', 'feedBtn', 'flowBtn']) document.getElementById(id).disabled = true;
+    document.getElementById('dashNote').textContent = 'Connection lost. Live controls unavailable; the printer may still be running.';
   }
 }
 pollPrinter();
@@ -755,31 +770,28 @@ async function postControl(url, body) {
 }
 
 document.getElementById('startBtn').onclick = () => {
-  if (!confirm('Start this print on the printer?')) return;
-  postControl('/api/printer/start', { confirm: true });
+  if (!preparation.ready || !confirm('Start ' + preparation.filename + '?\nConfirm the bed is clear and you reviewed the slice, firmware startup, nozzle and profile.')) return;
+  postControl('/api/printer/start', { confirm: true, filename: preparation.filename, gcode_sha256: preparation.gcode_sha256 });
 };
 document.getElementById('cancelBtn').onclick = () => {
-  if (!confirm('Cancel the print on the printer?')) return;
+  if (!confirm('Cancel ' + (selectedJob || 'the current print') + '?')) return;
   postControl('/api/printer/cancel', { confirm: true });
 };
 document.getElementById('pauseBtn').onclick = () => {
   postControl(resumeMode ? '/api/printer/resume' : '/api/printer/pause');
 };
 document.getElementById('simulateBtn').onclick = () => postControl('/api/simulate/start');
-document.getElementById('uploadBtn').onclick = () => {
-  const picker = document.createElement('input');
-  picker.type = 'file';
-  picker.accept = '.gcode,.gco,.g';
-  picker.onchange = async () => {
-    const file = picker.files && picker.files[0];
-    if (!file) return;
+document.getElementById('uploadBtn').onclick = async () => {
+  try {
+    const slice = await fetch('/api/slice/gcode');
+    if (!slice.ok) { note('Slice the current model first.'); return; }
     const body = new FormData();
-    body.append('file', file);
+    body.append('file', await slice.blob(), 'reviewed.gcode');
     const res = await fetch('/api/printer/upload', { method: 'POST', body });
     const data = await res.json().catch(() => ({}));
-    document.getElementById('dashNote').textContent = res.ok ? 'Uploaded ' + file.name : safeDetail(data, 'Upload failed.');
-  };
-  picker.click();
+    note(res.ok ? 'Uploaded ' + data.filename + '. Not printing. Review and press Start when ready.' : safeDetail(data, 'Upload failed.'));
+    await pollPrinter();
+  } catch (err) { note('Upload outcome unknown. Check OctoPrint before retrying.'); }
 };
 
 document.getElementById('sliceBtn').onclick = async () => {

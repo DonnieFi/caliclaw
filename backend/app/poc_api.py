@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import math
+import threading
 import os
 import tempfile
 from pathlib import Path
@@ -30,7 +33,7 @@ import uuid
 from .provider import ProviderAdapter, reflection_config_from_env, comparison_config_from_env
 from .repository import create_artifact, create_project, get_project, list_revisions
 from .revisions import create_revision_child
-from .slicer import slice_model
+from .slicer import slice_model, sha256_file
 from .tool_loop import ToolLoop
 from .worker import build_model
 
@@ -47,6 +50,8 @@ ROOT = Path(__file__).resolve().parents[2]
 _last_stl: dict[str, str] = {}
 _last_revision_id: str | None = None
 _last_slice: dict | None = None
+_uploaded_slice: dict | None = None
+_printer_lock = threading.Lock()
 _sessions: dict[str, list[dict]] = {}
 _session_messages: list[dict] = []
 
@@ -238,14 +243,29 @@ def slice_current():
     return _last_slice
 
 
+def _profile_paths():
+    profile = Path(os.environ.get("CALICLAW_SLICER_PROFILE") or ROOT / "profiles/ender3-proven-pla.ini")
+    overlay = Path(os.environ.get("CALICLAW_SLICER_OVERLAY") or ROOT / "profiles/ender3-speed-preference.ini")
+    return profile, overlay
+
+
 @router.post("/slice")
 def slice_now():
+    with _printer_lock:
+        return _slice_now()
+
+
+def _slice_now():
     global _last_slice
     stl = _last_stl.get("current")
     if not stl or not Path(stl).exists():
         raise HTTPException(status_code=400, detail="no checked STL available; build first")
-    r = slice_model(stl, str(ROOT / "profiles/ender3-proven-pla.ini"), overlay_path=str(ROOT / "profiles/ender3-speed-preference.ini"))
+    profile, overlay = _profile_paths()
+    r = slice_model(stl, str(profile), overlay_path=str(overlay))
     _last_slice = {
+        "stl_sha256": sha256_file(Path(stl)),
+        "overlay_sha256": sha256_file(overlay),
+        "gcode_sha256": sha256_file(Path(r.gcode_path)) if r.ok and r.gcode_path else None,
         "ok": r.ok,
         "error": r.error,
         "estimates": r.estimates,
@@ -256,39 +276,113 @@ def slice_now():
     return _last_slice
 
 
-# OctoPrint explicit controls (require confirm=true for risky actions)
+# State is intentionally process-local: run one worker. Restart requires re-upload.
 class ControlRequest(BaseModel):
     confirm: bool = False
+    filename: str | None = None
+    gcode_sha256: str | None = None
+
+
+def _checked_slice():
+    s = _last_slice
+    if not s or not s.get("ok") or s.get("revision_id") != _last_revision_id:
+        raise HTTPException(409, "slice the current revision first")
+    profile, overlay = _profile_paths()
+    checks = [
+        (_last_stl.get("current"), s.get("stl_sha256")),
+        (s.get("gcode_path"), s.get("gcode_sha256")),
+        (profile, s.get("profile_sha256")),
+        (overlay, s.get("overlay_sha256")),
+    ]
+    if any(not path or not digest or not Path(path).is_file() or sha256_file(Path(path)) != digest
+           for path, digest in checks):
+        raise HTTPException(409, "slice inputs changed; review and slice again")
+    return s
+
+
+def _require_idle():
+    status = _real_printer_status()
+    flags = status.get("flags") or {}
+    if status.get("simulated") or not flags.get("operational") or any(
+        flags.get(k) for k in ("printing", "paused", "pausing", "cancelling", "error", "closedOrError")
+    ):
+        raise HTTPException(409, "live printer must be operational and idle")
+    for name in ("hotend", "bed"):
+        actual = (status.get(name) or {}).get("actual")
+        if not isinstance(actual, (int, float)) or not math.isfinite(actual) or not 0 <= actual <= 350:
+            raise HTTPException(409, "fresh plausible heater readings required")
+    return status
+
+
+@router.get("/printer/preparation")
+def printer_preparation():
+    try:
+        s = _checked_slice()
+    except HTTPException as exc:
+        return {"ready": False, "reason": exc.detail}
+    uploaded = _uploaded_slice
+    ready = bool(uploaded and uploaded["gcode_sha256"] == s["gcode_sha256"])
+    return {"ready": ready, "reason": "Confirm clear bed and reviewed startup before starting" if ready else "Upload the reviewed slice first",
+            "filename": uploaded["filename"] if ready else None, "gcode_sha256": s["gcode_sha256"]}
+
+
+@router.get("/slice/gcode")
+def download_gcode():
+    s = _checked_slice()
+    return FileResponse(s["gcode_path"], media_type="text/plain", filename="reviewed.gcode")
 
 
 @router.post("/printer/upload")
 async def printer_upload(file: UploadFile = File(...)):
-    safe_name = Path(file.filename or "upload.gcode").name
-    if not safe_name or safe_name in (".", ".."):
-        raise HTTPException(status_code=400, detail="invalid filename")
-    tmp_dir = Path(tempfile.mkdtemp())
-    tmp = tmp_dir / safe_name
-    tmp.write_bytes(await file.read())
-    try:
-        res = upload_file(tmp, safe_name, print_after=False)
-        return res
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+    global _uploaded_slice
+    # Read a bounded body before taking the synchronous mutation lock.
+    content = await file.read(50 * 1024 * 1024 + 1)
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(413, "G-code exceeds 50 MiB")
+    with _printer_lock:
+        s = _checked_slice()
+        if hashlib.sha256(content).hexdigest() != s["gcode_sha256"]:
+            raise HTTPException(409, "upload must match the current reviewed slice exactly")
+        _require_idle()
+        _uploaded_slice = None
+        safe_name = "caliclaw-" + uuid.uuid4().hex + ".gcode"
+        try:
+            with tempfile.TemporaryDirectory(prefix="caliclaw-upload-") as directory:
+                tmp = Path(directory) / safe_name
+                tmp.write_bytes(content)
+                res = upload_file(tmp, safe_name, print_after=False)
+            remote = ((res.get("files") or {}).get("local") or {})
+            if remote.get("name") != safe_name:
+                raise RuntimeError("upload filename not verified")
+            _uploaded_slice = {"filename": safe_name, "gcode_sha256": s["gcode_sha256"],
+                               "path": remote.get("path") or safe_name}
+            return {"ok": True, **_uploaded_slice}
+        except Exception as exc:
+            raise HTTPException(502, "Upload outcome uncertain; inspect OctoPrint files/job before retrying") from exc
 
 
 @router.post("/printer/start")
 def printer_start(req: ControlRequest):
     if not req.confirm:
-        raise HTTPException(status_code=400, detail="confirm=true required")
-    if not _last_stl.get("current"):
-        raise HTTPException(status_code=400, detail="no checked preparation available")
-    status = _real_printer_status()
-    if status.get("simulated"):
-        raise HTTPException(status_code=400, detail="simulated printer cannot start live hardware")
-    try:
-        return control_job("start")
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(400, "confirm=true required")
+    with _printer_lock:
+        s = _checked_slice()
+        uploaded = _uploaded_slice
+        if not uploaded or req.filename != uploaded["filename"] or req.gcode_sha256 != s["gcode_sha256"] or uploaded["gcode_sha256"] != s["gcode_sha256"]:
+            raise HTTPException(409, "confirm the exact uploaded filename and slice hash")
+        _require_idle()
+        selected = ((get_job().get("job") or {}).get("file") or {})
+        if selected.get("origin") != "local" or selected.get("path") != uploaded["path"]:
+            raise HTTPException(409, "OctoPrint selection changed; re-upload the reviewed slice")
+        try:
+            control_job("start")
+        except Exception as exc:
+            raise HTTPException(502, "Start outcome uncertain; inspect the exact job before retrying") from exc
+        observed = get_job()
+        current = ((observed.get("job") or {}).get("file") or {})
+        verified = observed.get("state") == "Printing" and current.get("path") == uploaded["path"] and current.get("origin") == "local"
+        return {"ok": verified, "state": observed.get("state"), "filename": current.get("name"),
+                "message": "Printing verified" if verified else "Start requested; printing not yet verified. Check status before retrying."}
 
 
 @router.post("/printer/pause")
@@ -304,6 +398,7 @@ def printer_pause():
 
 @router.post("/printer/resume")
 def printer_resume():
+    _refuse_simulated()
     try:
         return control_job("resume")
     except Exception as exc:
@@ -326,7 +421,7 @@ class FactorsRequest(BaseModel):
 
 
 def _in_range(name: str, value: float, lo: float, hi: float) -> None:
-    if value < lo or value > hi:
+    if not math.isfinite(value) or value < lo or value > hi:
         raise HTTPException(status_code=400, detail=f"{name} must be between {lo} and {hi}")
 
 
@@ -409,6 +504,10 @@ def chat(req: ChatRequest, request: Request, response: Response):
     adapter = ProviderAdapter(cfg)
 
     def build(args):
+        with _printer_lock:
+            return build_locked(args)
+
+    def build_locked(args):
         global _last_revision_id
         r = build_model(args.get("scad", ""))
         if r.ok and r.stl_path:
@@ -441,17 +540,10 @@ def chat(req: ChatRequest, request: Request, response: Response):
         return {"ok": r.ok, "error": r.error, "mesh": r.mesh, "sha256": r.sha256}
 
     def slice_fixed(args):
-        global _last_slice
-        stl = _last_stl.get("current")
-        if not stl or not Path(stl).exists():
-            return {"ok": False, "error": "no checked STL available; build first"}
-        r = slice_model(stl, str(ROOT / "profiles/ender3-proven-pla.ini"), overlay_path=str(ROOT / "profiles/ender3-speed-preference.ini"))
-        _last_slice = {
-            "ok": r.ok, "error": r.error, "estimates": r.estimates,
-            "gcode_path": r.gcode_path, "profile_sha256": r.profile_sha256,
-            "revision_id": _last_revision_id,
-        }
-        return {"ok": r.ok, "error": r.error, "estimates": r.estimates}
+        try:
+            return slice_now()
+        except HTTPException as exc:
+            return {"ok": False, "error": exc.detail}
 
     def printer_status(args):
         return _real_printer_status()
