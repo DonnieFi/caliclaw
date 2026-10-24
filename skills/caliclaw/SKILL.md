@@ -5,7 +5,9 @@ description: Use when designing, slicing, or diagnosing a 3D print from the Cali
 
 # CaliClaw
 
-CaliClaw is the local printing workbench. Use its HTTP API at the configured `baseUrl` (default `http://127.0.0.1:8000`). Pass tool arguments as validated fields. Do not invent shell commands, host paths, or printer credentials.
+CaliClaw is the local printing workbench. Use the `caliclaw` tool. It reads status, the current part, revisions, and fit notes, and it can prepare a slice. It cannot start, pause, or cancel a print. Those stay on the workbench screen and require an explicit confirm.
+
+The point of a fit note is the next revision. Record what you measured and name the features that must stay. Then change only the part the note describes.
 
 Units are millimeters unless the user names another unit. Ask for a missing fit dimension before building. Record assumptions that are not measurements.
 

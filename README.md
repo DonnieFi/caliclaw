@@ -1,8 +1,10 @@
 # CaliClaw
 
-OpenClaw plugin and standalone webapp for 3D printing.
+A printing workbench for one functional part: describe it, check the mesh, print it, then record what the part actually did.
 
-CaliClaw turns a measured request into a checked mesh, a reviewed slice, and an explicit printer action. The name is the workshop calibration mascot: a small clawed cat for bridges, overhangs, and body dimensions, in the same role as a calibration print, made for an OpenClaw shop.
+The next revision changes that measurement and leaves the kept features alone. OpenClaw reaches the same project through the `caliclaw` tool. The browser is the workbench. A model can design and explain. It does not start the printer, and a model outage does not stop a print that is already running.
+
+This is the shop tool, not a contest entry. The name is the workshop calibration mascot.
 
 ## What this repo is
 
@@ -41,6 +43,8 @@ ln -s "$PWD" "$HOME/.openclaw/extensions/caliclaw"
 Restart the OpenClaw gateway so it reads `openclaw.plugin.json`. The skill tells the agent to call this workbench, keep log diagnosis read-only during a print, and require an explicit confirm before start or cancel.
 
 `baseUrl` defaults to `http://127.0.0.1:8000`.
+
+The tool actions are `status`, `project`, `revisions`, `fit`, and `slice`. `fit` stores a measurement and the features that must stay. Start and cancel are not tool actions.
 
 ## Printer controls
 

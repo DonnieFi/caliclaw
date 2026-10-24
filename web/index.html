@@ -69,8 +69,8 @@
 <div class="panel">
   <div class="panel-scroll">
     <div class="section">
-      <h3>Project</h3>
-      <div class="row"><strong>Bracket workbench</strong><span class="badge">single part</span></div>
+      <h3>Design</h3>
+      <div class="row"><strong id="projectName">Workshop</strong><span class="badge">one part</span></div>
       <div class="row">
         <label>Model</label>
         <select id="model"><option>Configured model</option><option>Comparison model</option></select>
@@ -78,7 +78,7 @@
     </div>
 
     <div class="section">
-      <h3>Printer (live)</h3>
+      <h3>Print</h3>
       <div class="metric"><span>Source</span><span id="pSource">—</span></div>
       <div class="metric"><span>State</span><span id="pState">—</span></div>
       <div class="metric"><span>Hotend</span><span id="pHot">—</span></div>
@@ -100,7 +100,7 @@
     </div>
 
     <div class="section">
-      <h3>Validation</h3>
+      <h3>Checks</h3>
       <div class="metric"><span>Watertight</span><span id="vWat">—</span></div>
       <div class="metric"><span>Components</span><span id="vComp">—</span></div>
       <div class="metric"><span>Bounds</span><span id="vBounds">—</span></div>
@@ -108,7 +108,7 @@
     </div>
 
     <div class="section">
-      <h3>Orientation &amp; slicing</h3>
+      <h3>Prepare</h3>
       <div class="metric"><span>Profile</span><span>ender3-proven-pla</span></div>
       <div class="metric"><span>Est. time</span><span id="sEst">—</span></div>
       <div class="row"><button id="sliceBtn">Prepare slice</button><button id="simulateBtn">Simulated print</button></div>
@@ -120,24 +120,24 @@
     </div>
 
     <div class="section">
-      <h3>Metrics</h3>
-      <div class="kpi-grid">
-        <div class="kpi"><div class="l">Tokens</div><div class="v" id="mTokens">—</div></div>
-        <div class="kpi"><div class="l">Reasoning</div><div class="v" id="mReason">—</div></div>
-        <div class="kpi"><div class="l">Tool calls</div><div class="v" id="mTools">—</div></div>
-        <div class="kpi"><div class="l">Revisions</div><div class="v" id="mRevs">—</div></div>
-      </div>
+      <h3>Learn</h3>
+      <div id="fitList"><div class="rev">No fit notes yet. Record what you measured. The rest of the part stays.</div></div>
+      <div class="row"><input id="fitNote" placeholder="USB opening is 2 mm too far right" style="flex:1" /></div>
+      <div class="row"><input id="fitKeep" placeholder="Keep: mounting hole spacing" style="flex:1" /><button id="fitBtn">Record fit</button></div>
+      <div class="metric"><span>Keep</span><span id="fitKeepList">—</span></div>
       <div class="metric"><span>Bounds</span><span id="mBounds">—</span></div>
       <div class="metric"><span>Slice est.</span><span id="mSlice">—</span></div>
+      <div class="metric"><span>Last reply</span><span><span id="mTokens">—</span> tokens · <span id="mTools">—</span> tools · <span id="mRevs">—</span> revisions</span></div>
+      <div id="mReason" hidden>—</div>
     </div>
 
     <div class="section">
-      <h3>Chat</h3>
+      <h3>Design chat</h3>
       <div class="chat-log" id="log">
-        <div class="msg">CaliClaw ready. Ask for a measured part or a diagnosis.</div>
+        <div class="msg">Describe the part, or say what the print taught you. Kept features stay put.</div>
       </div>
       <div class="chat-input">
-        <input id="input" placeholder="Type a request…" />
+        <input id="input" placeholder="A bracket, 40 mm wide, holes 30 mm apart…" />
         <button id="send" class="primary">Send</button>
       </div>
     </div>
@@ -240,6 +240,42 @@ async function loadRevisions() {
 }
 loadRevisions();
 
+async function loadProject() {
+  try {
+    const r = await fetch('/api/project');
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById('projectName').textContent = d.name || 'Workshop';
+    const keep = document.getElementById('fitKeepList');
+    keep.textContent = (d.keep && d.keep.length) ? d.keep.join(', ') : '—';
+    const list = document.getElementById('fitList');
+    if (!d.fit || d.fit.length === 0) {
+      list.innerHTML = '<div class="rev">No fit notes yet. Record what you measured. The rest of the part stays.</div>';
+      return;
+    }
+    list.innerHTML = d.fit.map((note) => '<div class="rev"><span>' + note.note + '</span></div>').join('');
+  } catch (e) { console.error(e); }
+}
+loadProject();
+window.loadProject = loadProject;
+document.getElementById('fitBtn').onclick = async () => {
+  const note = document.getElementById('fitNote').value.trim();
+  const keepRaw = document.getElementById('fitKeep').value.replace(/^keep:\s*/i, '');
+  const keep = keepRaw.split(',').map((s) => s.trim()).filter(Boolean);
+  const res = await fetch('/api/fit', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({note, keep})
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    document.getElementById('fitList').innerHTML = '<div class="rev">' + (data.detail || 'Could not record the fit') + '</div>';
+    return;
+  }
+  document.getElementById('fitNote').value = '';
+  loadProject();
+};
+
 // Chat
 const log = document.getElementById('log');
 const input = document.getElementById('input');
@@ -273,6 +309,7 @@ async function send() {
     if (data.slice_estimate) { document.getElementById('sEst').textContent = data.slice_estimate; document.getElementById('mSlice').textContent = data.slice_estimate; }
     if (data.stl_url) loadSTL(data.stl_url);
     loadRevisions();
+    loadProject();
   } catch (e) {
     b.textContent = 'Error: ' + e;
     console.error(e);
@@ -365,6 +402,7 @@ document.getElementById('cancelBtn').onclick = async () => {
         if (data.stl_url) {
           if (window.loadSTL) window.loadSTL(data.stl_url);
         }
+        if (window.loadProject) window.loadProject();
         // refresh revisions
         fetch('/api/revisions').then(r=>r.json()).then(list => {
           var el = document.getElementById('revList');

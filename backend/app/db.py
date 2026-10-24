@@ -94,6 +94,16 @@ CREATE TABLE IF NOT EXISTS printer_state (
     status_json TEXT NOT NULL DEFAULT '{}',
     observed_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS fit_reports (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    revision_id TEXT REFERENCES revisions(id),
+    note TEXT NOT NULL,
+    measured_json TEXT NOT NULL DEFAULT '{}',
+    keep_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL
+);
 """
 
 

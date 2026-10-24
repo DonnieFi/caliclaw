@@ -13,12 +13,13 @@ from pydantic import BaseModel
 
 from .collector import SimulatedPrinterState
 from .db import init_db
+from .fit import fit_memory_text, project_snapshot, record_fit
 from .octoprint import camera_snapshot, control_job, get_job, get_printer, upload_file
 import sqlite3
 import uuid
 
 from .provider import ProviderAdapter, reflection_config_from_env, comparison_config_from_env
-from .repository import create_artifact, create_project, list_revisions
+from .repository import create_artifact, create_project, get_project, list_revisions
 from .revisions import create_revision_child
 from .slicer import slice_model
 from .tool_loop import ToolLoop
@@ -49,7 +50,7 @@ def _load_state():
             PROJECT = type("Project", (), {"id": row[0]})()
         else:
             from .repository import create_project as _cp
-            PROJECT = _cp(DB_PATH, "POC workbench")
+            PROJECT = _cp(DB_PATH, "Workshop")
         if PROJECT is not None:
             rrow = conn.execute("SELECT id, artifact_id FROM revisions WHERE project_id=? ORDER BY created_at DESC LIMIT 1", (PROJECT.id,)).fetchone()
             if rrow:
@@ -62,11 +63,26 @@ def _load_state():
     except Exception:
         try:
             from .repository import create_project as _cp
-            PROJECT = _cp(DB_PATH, "POC workbench")
+            PROJECT = _cp(DB_PATH, "Workshop")
         except Exception:
             PROJECT = None
 
 _load_state()
+
+
+WORKBENCH_BRIEF = (
+    "You are the workshop assistant for one functional part. "
+    "Ask for a missing fit dimension. Label anything you assume. "
+    "Change only what the latest fit note asks for, and leave kept features alone. "
+    "Build with OpenSCAD through build_model. Slice only after the mesh checks pass. "
+    "You may read printer status and logs. Do not start, pause, or cancel a print."
+)
+
+
+class FitRequest(BaseModel):
+    note: str
+    measured: dict = {}
+    keep: list[str] = []
 
 
 class ChatRequest(BaseModel):
@@ -123,6 +139,31 @@ def _real_printer_status():
 @router.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@router.get("/project")
+def project_view():
+    if PROJECT is None:
+        raise HTTPException(status_code=404, detail="no project")
+    stored = get_project(DB_PATH, PROJECT.id)
+    return project_snapshot(DB_PATH, PROJECT.id, stored.name if stored else "Workshop")
+
+
+@router.post("/fit")
+def post_fit(req: FitRequest):
+    if PROJECT is None:
+        raise HTTPException(status_code=404, detail="no project")
+    try:
+        return record_fit(
+            DB_PATH,
+            PROJECT.id,
+            note=req.note,
+            revision_id=_last_revision_id,
+            measured=req.measured,
+            keep=req.keep,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/printer")
@@ -353,11 +394,16 @@ def chat(req: ChatRequest, request: Request, response: Response):
         {"type": "function", "function": {"name": "get_printer_status", "description": "Get printer status.", "parameters": {"type": "object", "properties": {}}}},
         {"type": "function", "function": {"name": "get_log_events", "description": "Read Pi log events.", "parameters": {"type": "object", "properties": {}}}},
     ]
-    history = _sessions.setdefault(session_id, [])
+    history = [m for m in _sessions.setdefault(session_id, []) if m.get("role") != "system"]
+    prompt = [{"role": "system", "content": WORKBENCH_BRIEF}]
+    if PROJECT is not None:
+        memory = fit_memory_text(DB_PATH, PROJECT.id)
+        if memory:
+            prompt.append({"role": "system", "content": memory})
     history = history + [{"role": "user", "content": req.message}]
     loop = ToolLoop(adapter, tools, tool_schemas=schemas, max_iterations=8)
-    result = loop.run(list(history), effort=req.effort)
-    _sessions[session_id] = result.messages
+    result = loop.run(prompt + history, effort=req.effort)
+    _sessions[session_id] = [m for m in result.messages if m.get("role") != "system"]
 
     if result.error:
         raise HTTPException(status_code=502, detail=result.error)
