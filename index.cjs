@@ -36,6 +36,7 @@ function callWorkbench(base, method, path, body) {
         });
       },
     );
+    req.setTimeout(15000, () => req.destroy(new Error("Workbench request timed out.")));
     req.on("error", reject);
     if (payload) req.write(payload);
     req.end();
@@ -51,7 +52,7 @@ module.exports = {
   name: "CaliClaw",
   description: "Read, prepare, and remember a 3D print. Hardware start and cancel stay on the workbench.",
   register(api) {
-    if (api.registrationMode && api.registrationMode !== "full") return;
+    if (api.registrationMode && !["full", "discovery", "tool-discovery"].includes(api.registrationMode)) return;
     const base = workbenchUrl(api);
     api.registerTool(
       {
