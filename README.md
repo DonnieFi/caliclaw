@@ -82,7 +82,9 @@ Open http://127.0.0.1:8000
 
 The worker shells out to `openscad` and `prusa-slicer`, which need to be on the machine. Copy `.env.example` to `.env` where the model and the printer should be reachable. Leave `.env` uncommitted.
 
-Design chat needs `CALICLAW_API_KEY`. Recording a fit, reading status, and slicing keep working when that key is empty.
+Chat starts in **Brainstorm**, where build and slice tools are unavailable. Choose **Design** to create a new CAD part or **Revise** to change the current CAD part. The same conversation is saved in SQLite, including offline notes. Building needs `CALICLAW_API_KEY`; recording fit notes and importing STL files do not.
+
+CAD builds store the full source and named numeric dimensions. Fit notes can include measured values and exact dimension names to keep. Revise refuses changed or missing kept dimensions before compiling, and a failed build leaves the current part unchanged. Imported meshes retain their original bytes and can be downloaded from revision history; they are not treated as recovered parametric CAD.
 
 `profiles/` contains an Ender-3 sized PrusaSlicer fixture for tests. It does not certify a physical printer. Point the bench at a profile you have actually printed with before you trust a time estimate.
 

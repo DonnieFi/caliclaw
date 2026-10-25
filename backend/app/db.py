@@ -95,6 +95,13 @@ CREATE TABLE IF NOT EXISTS printer_state (
     observed_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS conversations (
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    session_id TEXT NOT NULL,
+    messages_json TEXT NOT NULL DEFAULT '[]',
+    PRIMARY KEY(project_id, session_id)
+);
+
 CREATE TABLE IF NOT EXISTS fit_reports (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES projects(id),

@@ -5,7 +5,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Literal
 
 from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, Response
@@ -16,6 +16,8 @@ from .printer_logs import get_log_events
 from .db import init_db
 from .geometry import validate_stl
 from .parts import save_part
+from .cad_revision import build_revision
+from .conversations import load_conversation, save_conversation
 from .repository import get_revision, get_artifact
 from .fit import fit_memory_text, project_snapshot, record_fit
 from .octoprint import (
@@ -102,6 +104,7 @@ class ChatRequest(BaseModel):
     message: str
     effort: str = "medium"
     model: str | None = None
+    phase: Literal["brainstorm", "design", "revise"] = "brainstorm"
 
 
 class ChatResponse(BaseModel):
@@ -453,40 +456,46 @@ def chat(req: ChatRequest, request: Request, response: Response):
                 cfg = base
     if cfg is None:
         cfg = reflection_config_from_env()
+    history = (load_conversation(DB_PATH, PROJECT.id, session_id) if PROJECT is not None else _sessions.get(session_id, []))
+    history = [m for m in history if m.get("role") != "system"]
+    history.append({"role": "user", "content": req.message})
+
+    def remember(messages):
+        clean = [m for m in messages if m.get("role") != "system"]
+        _sessions[session_id] = clean
+        if PROJECT is not None:
+            save_conversation(DB_PATH, PROJECT.id, session_id, clean)
+
+    remember(history)
     if cfg is None:
-        raise HTTPException(status_code=503, detail="CALICLAW_API_KEY not configured")
+        reply = ("Saved your brainstorm. What must the part fit, which dimensions have you measured, and what must stay unchanged? "
+                 "Choose Design when ready. A configured model key is needed to build." if req.phase == "brainstorm" else
+                 "Your notes are saved. Design and revise need a configured model key; the current part is unchanged.")
+        remember(history + [{"role": "assistant", "content": reply}])
+        return ChatResponse(reply=reply, tool_calls=0, iterations=0)
+    if req.phase == "revise" and not _last_revision_id:
+        raise HTTPException(status_code=400, detail="Build or import a part before revising.")
     adapter = ProviderAdapter(cfg)
+    built = False
+    parent_id = _last_revision_id if req.phase == "revise" else None
 
     def build(args):
-        global _last_revision_id
-        r = build_model(args.get("scad", ""))
-        if r.ok and r.stl_path:
-            _last_stl["current"] = r.stl_path
-            global _last_slice
+        nonlocal built
+        global _last_revision_id, _last_slice
+        if built:
+            return {"ok": False, "error": "One revision was already built this turn."}
+        if PROJECT is None:
+            return {"ok": False, "error": "No project available."}
+        try:
+            r, rev, art = build_revision(DB_PATH, PROJECT.id, parent_id, args.get("scad", ""), args.get("dimensions", {}))
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+        if rev and art:
+            _last_stl.clear()
+            _last_stl["current"] = art.path
             _last_slice = None
-            if r.preview_path:
-                _last_stl["preview"] = r.preview_path
-            try:
-                rev = create_revision_child(
-                    DB_PATH, PROJECT.id, _last_revision_id,
-                    params={"scad": args.get("scad", "")[:120]},
-                    source_hash=r.sha256,
-                    validation={"watertight": (r.mesh or {}).get("watertight"),
-                                "components": (r.mesh or {}).get("components"),
-                                "bounds": (r.mesh or {}).get("bounds_mm"),
-                                "volume": (r.mesh or {}).get("volume_mm3")})
-                art = create_artifact(DB_PATH, __import__("backend.app.models", fromlist=["Artifact"]).Artifact(
-                    revision_id=rev.id, kind="stl", path=r.stl_path,
-                    sha256=r.sha256, bytes=r.bytes, metadata=r.mesh or {}))
-                # update revision.artifact_id
-                import sqlite3
-                conn = sqlite3.connect(DB_PATH)
-                conn.execute("UPDATE revisions SET artifact_id=? WHERE id=?", (art.id, rev.id))
-                conn.commit()
-                conn.close()
-                _last_revision_id = rev.id
-            except Exception as exc:
-                import traceback; traceback.print_exc()
+            _last_revision_id = rev.id
+            built = True
         return {"ok": r.ok, "error": r.error, "mesh": r.mesh, "sha256": r.sha256}
 
     def slice_fixed(args):
@@ -510,21 +519,29 @@ def chat(req: ChatRequest, request: Request, response: Response):
 
     tools = {"build_model": build, "slice_model": slice_fixed, "get_printer_status": printer_status, "get_log_events": log_events}
     schemas = [
-        {"type": "function", "function": {"name": "build_model", "description": "Compile OpenSCAD to a validated STL.", "parameters": {"type": "object", "properties": {"scad": {"type": "string"}}, "required": ["scad"]}}},
+        {"type": "function", "function": {"name": "build_model", "description": "Compile OpenSCAD to a validated STL.", "parameters": {"type": "object", "properties": {"scad": {"type": "string"}, "dimensions": {"type": "object", "description": "Named numeric dimensions. Reference these names in scad; do not assign them there."}}, "required": ["scad", "dimensions"]}}},
         {"type": "function", "function": {"name": "slice_model", "description": "Slice the checked bracket STL with the pinned profile.", "parameters": {"type": "object", "properties": {}}}},
         {"type": "function", "function": {"name": "get_printer_status", "description": "Get printer status.", "parameters": {"type": "object", "properties": {}}}},
         {"type": "function", "function": {"name": "get_log_events", "description": "Read configured collected printer logs, or report unavailable. Check source_updated_at; logs may be stale.", "parameters": {"type": "object", "properties": {}}}},
     ]
-    history = [m for m in _sessions.setdefault(session_id, []) if m.get("role") != "system"]
+    if req.phase == "brainstorm":
+        tools = {name: fn for name, fn in tools.items() if name in ("get_printer_status", "get_log_events")}
+        schemas = [schema for schema in schemas if schema["function"]["name"] in tools]
     prompt = [{"role": "system", "content": WORKBENCH_BRIEF}]
+    prompt.append({"role": "system", "content": (
+        "Brainstorm only. Ask about measurements and record assumptions. Do not build or slice." if req.phase == "brainstorm" else
+        "The user explicitly selected " + req.phase + ". Build at most one successful revision. Supply named numeric dimensions separately from the CAD body.")})
+    if parent_id:
+        parent = get_revision(DB_PATH, parent_id)
+        if parent:
+            prompt.append({"role": "system", "content": "Current part to revise: " + json.dumps(parent.params)})
     if PROJECT is not None:
         memory = fit_memory_text(DB_PATH, PROJECT.id)
         if memory:
             prompt.append({"role": "system", "content": memory})
-    history = history + [{"role": "user", "content": req.message}]
     loop = ToolLoop(adapter, tools, tool_schemas=schemas, max_iterations=8)
     result = loop.run(prompt + history, effort=req.effort)
-    _sessions[session_id] = [m for m in result.messages if m.get("role") != "system"]
+    remember(result.messages)
 
     if result.error:
         raise HTTPException(status_code=502, detail=result.error)
@@ -533,7 +550,7 @@ def chat(req: ChatRequest, request: Request, response: Response):
     mesh_bounds = None
     mesh = None
     slice_estimate = None
-    for m in result.messages:
+    for m in result.messages[len(prompt) + len(history):]:
         if m.get("role") != "tool":
             continue
         content = m.get("content", "")

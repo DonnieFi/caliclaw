@@ -68,6 +68,6 @@ def validate_protected_dimensions(
 ) -> list[str]:
     violations = []
     for key in protected:
-        if key in parent_params and key in child_params and parent_params[key] != child_params[key]:
-            violations.append(f"protected dimension changed: {key} {parent_params[key]} -> {child_params[key]}")
+        if key in parent_params and (key not in child_params or parent_params[key] != child_params[key]):
+            violations.append(f"protected dimension changed: {key} {parent_params[key]} -> {child_params.get(key, "missing")}")
     return violations

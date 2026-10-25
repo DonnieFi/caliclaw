@@ -436,6 +436,9 @@
         <button type="button" role="tab" id="tabPrinter" tabindex="-1" aria-selected="false" aria-controls="printerPane">Printer</button>
       </div>
       <div class="picks" id="modelPicks">
+        <label>Mode <select id="phase" aria-label="Chat mode">
+          <option value="brainstorm">Brainstorm</option><option value="design">Design</option><option value="revise">Revise</option>
+        </select></label>
         <label>Model
           <select id="model" aria-label="Model">
             <option value="">Workshop model</option>
@@ -475,6 +478,8 @@
       <textarea id="fitNote" placeholder="Hole was 0.4 mm tight"></textarea>
       <label for="fitKeep" class="field-label">Features to keep</label>
       <input id="fitKeep" placeholder="Keep: hole spacing, wall thickness" />
+      <label for="fitMeasured" class="field-label">Named measurements (optional JSON, mm)</label>
+      <input id="fitMeasured" placeholder='{"hole_diameter": 4.6}' />
       <button type="button" class="ghost" id="fitBtn">Save note</button>
       <p class="hint" id="fitStatus" role="status"></p>
       <p class="hint" id="fitKeepList"></p>
@@ -960,10 +965,18 @@ loadRevisions();
 document.getElementById('fitBtn').onclick = async () => {
   const note = document.getElementById('fitNote').value.trim();
   const keep = document.getElementById('fitKeep').value.replace(/^keep:\s*/i, '').split(',').map((part) => part.trim()).filter(Boolean);
+  let measured = {};
+  try {
+    measured = JSON.parse(document.getElementById('fitMeasured').value.trim() || '{}');
+    if (!measured || Array.isArray(measured) || typeof measured !== 'object' || Object.values(measured).some(v => typeof v !== 'number' || !Number.isFinite(v))) throw new Error();
+  } catch (_) {
+    document.getElementById('fitStatus').textContent = 'Enter measurements as a JSON object with numeric values.';
+    return;
+  }
   const res = await fetch('/api/fit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ note, keep })
+    body: JSON.stringify({ note, keep, measured })
   });
   const data = await res.json().catch(() => ({}));
   const status = document.getElementById('fitStatus');
@@ -1043,7 +1056,7 @@ async function send(preset) {
   appendUser(text);
   const bubble = appendAssistant('On it…');
   try {
-    const body = { message: text, effort: document.getElementById('effort').value || 'medium' };
+    const body = { message: text, phase: document.getElementById('phase').value, effort: document.getElementById('effort').value || 'medium' };
     const model = document.getElementById('model').value;
     if (model) body.model = model;
     const res = await fetch('/api/chat', {
