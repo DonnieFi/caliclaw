@@ -165,6 +165,7 @@
   .review-check { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; margin-top: 16px; }
   #testPrinter { margin-top: 12px; }
   #setupStatus { margin-top: 12px; }
+  .gcode-download { display: block; text-align: center; font-size: 12px; }
   .wide { width: 100%; margin-top: 10px; }
   #savePrinter { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   .dash-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
@@ -456,6 +457,7 @@
         <button type="button" id="pauseBtn" disabled>Pause</button>
         <button type="button" id="cancelBtn" disabled>Cancel</button>
       </div>
+      <a class="ghost wide gcode-download" href="/api/slice/gcode">Download G-code for review</a>
       <button type="button" class="ghost wide" id="uploadBtn" disabled>Upload checked slice</button>
       <button type="button" class="ghost wide" id="simulateBtn" hidden>Play a simulated job</button>
     </div>
@@ -735,6 +737,7 @@ function targetNumber(block, flat) {
 let resumeMode = false;
 let selectedPrinterIdentity = "";
 let preparation = {};
+let selectedJob = "";
 async function refreshPreparation() {
   try {
     const res = await fetch('/api/slice/current');
@@ -743,7 +746,7 @@ async function refreshPreparation() {
     document.getElementById('preparationNote').textContent = preparation.profile + '. ' + preparation.reason;
   } catch (_) { preparation = {}; }
   document.getElementById('uploadBtn').disabled = !printerIdle || !preparation.ready;
-  document.getElementById('startBtn').disabled = !printerIdle || !preparation.uploaded;
+  document.getElementById('startBtn').disabled = !printerIdle || !preparation.uploaded || selectedJob !== preparation.filename;
 }
 async function pollPrinter() {
   const generation = printerGeneration;
@@ -753,6 +756,7 @@ async function pollPrinter() {
     const data = await res.json();
     if (generation !== printerGeneration) return;
     selectedPrinterIdentity = data.printer_id || "";
+    selectedJob = data.job || '';
     const simulated = Boolean(data.simulated) || String(data.source || '').indexOf('simulated') === 0;
     const volume = data.printer && data.printer.volume;
     if (window.setBuildVolume) window.setBuildVolume(volume);
@@ -803,6 +807,9 @@ async function pollPrinter() {
       control.disabled = simulated;
       control.title = simulated ? 'Simulated printer. This does not move the machine.' : '';
     }
+    const active = Boolean(data.flags && (data.flags.printing || data.flags.paused));
+    document.getElementById('pauseBtn').disabled = simulated || !active;
+    document.getElementById('cancelBtn').disabled = simulated || !active;
     document.getElementById('simulateBtn').hidden = !simulated;
     await refreshPreparation();
   } catch (err) {
@@ -811,6 +818,7 @@ async function pollPrinter() {
     selectedPrinterIdentity = "";
     updateCameraRecovery();
     for (const id of ['startBtn', 'pauseBtn', 'cancelBtn', 'uploadBtn', 'toolTarget', 'toolBtn', 'bedTarget', 'bedBtn', 'feedTarget', 'feedBtn', 'flowTarget', 'flowBtn']) document.getElementById(id).disabled = true;
+    document.getElementById('dashNote').textContent = 'Connection lost. Live controls unavailable; the printer may still be running.';
     paintState(document.getElementById('pState'), 'Unavailable', 'bad');
     paintState(document.getElementById('stageState'), 'Unavailable', 'bad');
     console.error(err);
@@ -945,16 +953,16 @@ async function postControl(url, body) {
     body: body ? JSON.stringify(body) : undefined
   });
   const data = await res.json().catch(() => ({}));
-  document.getElementById('dashNote').textContent = res.ok ? '' : safeDetail(data, 'The printer did not accept that.');
+  document.getElementById('dashNote').textContent = res.ok ? (data.message || '') : safeDetail(data, 'The printer did not accept that.');
   pollPrinter();
 }
 
 document.getElementById('startBtn').onclick = () => {
   if (!preparation.uploaded || !confirm('Start ' + preparation.filename + ' on ' + (document.getElementById('pSource').textContent || 'the selected printer') + '? Verify the bed is clear and the printer startup preparation is complete.')) return;
-  postControl('/api/printer/start', { confirm: true, filename: preparation.filename, slice_id: preparation.slice_id });
+  postControl('/api/printer/start', { confirm: true, filename: preparation.filename, slice_id: preparation.slice_id, gcode_sha256: preparation.gcode_sha256 });
 };
 document.getElementById('cancelBtn').onclick = () => {
-  if (!confirm('Cancel the print on ' + document.getElementById('pSource').textContent + '?')) return;
+  if (!confirm('Cancel ' + (selectedJob || 'the current print') + ' on ' + document.getElementById('pSource').textContent + '?')) return;
   postControl('/api/printer/cancel', { confirm: true });
 };
 document.getElementById('pauseBtn').onclick = () => {

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import tempfile
 import threading
@@ -388,7 +389,8 @@ def preparation_view():
     return {"profile": label, "ready": ready, "uploaded": uploaded, "reason": reason,
             "filename": _uploaded_slice["filename"] if uploaded else None,
             "slice_id": _last_slice.get("id") if _last_slice else None,
-            "estimates": _last_slice.get("estimates", {}) if _last_slice else {}}
+            "estimates": _last_slice.get("estimates", {}) if _last_slice else {},
+            "gcode_sha256": _last_slice.get("gcode_sha256") if _last_slice else None}
 
 
 @router.get("/slice/current")
@@ -478,13 +480,37 @@ def _camera_restart(req):
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-def checked_preparation():
+def checked_preparation(*, require_confirmed=True):
     try:
-        validate_preparation(_last_slice, _last_stl.get("current"), _last_revision_id)
+        validate_preparation(_last_slice, _last_stl.get("current"), _last_revision_id, require_confirmed=require_confirmed)
     except (OSError, ValueError, KeyError) as exc:
         detail = str(exc) if isinstance(exc, ValueError) else "Preparation unavailable. Slice again."
         raise HTTPException(status_code=409, detail=detail) from exc
     return _last_slice
+
+
+def _require_idle():
+    status = _real_printer_status()
+    if not known_idle(status):
+        raise HTTPException(status_code=409, detail="Live printer must be operational and idle.")
+    for name in ("hotend", "bed"):
+        actual = (status.get(name) or {}).get("actual")
+        if isinstance(actual, bool) or not isinstance(actual, (int, float)) or not math.isfinite(actual) or not 0 <= actual <= 350:
+            raise HTTPException(status_code=409, detail="Fresh plausible heater readings required.")
+    return status
+
+
+@router.get("/printer/preparation")
+def printer_preparation():
+    view = preparation_view()
+    return {**view, "ready": view["uploaded"]}
+
+
+@router.get("/slice/gcode")
+def download_gcode():
+    with _control_lock:
+        preparation = checked_preparation(require_confirmed=False)
+        return FileResponse(preparation["gcode_path"], media_type="text/plain", filename="reviewed.gcode")
 
 
 @router.post("/printer/upload")
@@ -497,8 +523,7 @@ def printer_upload(req: ControlRequest | None = None):
 def _upload_checked_slice():
     global _uploaded_slice
     preparation = checked_preparation()
-    if not known_idle(_real_printer_status()):
-        raise HTTPException(status_code=409, detail="Upload requires a known-idle live printer.")
+    _require_idle()
     _uploaded_slice = None
     filename = "caliclaw-" + preparation["id"] + ".gcode"
     try:
@@ -507,7 +532,7 @@ def _upload_checked_slice():
         if remote.get("name") != filename or remote.get("path", filename) != filename:
             raise ValueError("upload identity mismatch")
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Checked slice upload could not be verified.") from exc
+        raise HTTPException(status_code=502, detail="Upload outcome uncertain; inspect OctoPrint files/job before retrying.") from exc
     _uploaded_slice = {"slice_id": preparation["id"], "filename": filename, "printer_id": printer_identity()}
     return preparation_view()
 
@@ -515,6 +540,7 @@ def _upload_checked_slice():
 class StartRequest(ControlRequest):
     filename: str = ""
     slice_id: str = ""
+    gcode_sha256: str = ""
 
 
 @router.post("/printer/start")
@@ -529,10 +555,9 @@ def _start_checked_print(req):
     if not req.confirm:
         raise HTTPException(status_code=400, detail="confirm=true required")
     preparation = checked_preparation()
-    if not _uploaded_slice or _uploaded_slice.get("printer_id") != printer_identity() or _uploaded_slice["slice_id"] != preparation["id"] or req.slice_id != preparation["id"] or req.filename != _uploaded_slice["filename"]:
+    if not _uploaded_slice or _uploaded_slice.get("printer_id") != printer_identity() or _uploaded_slice["slice_id"] != preparation["id"] or (req.slice_id and req.slice_id != preparation["id"]) or req.filename != _uploaded_slice["filename"] or req.gcode_sha256 != preparation["gcode_sha256"]:
         raise HTTPException(status_code=409, detail="Upload and confirm the current checked slice first.")
-    if not known_idle(_real_printer_status()):
-        raise HTTPException(status_code=409, detail="Start requires a known-idle live printer.")
+    _require_idle()
     try:
         job = get_job()
         selected = (job.get("job") or {}).get("file") or {}
@@ -542,11 +567,16 @@ def _start_checked_print(req):
             raise HTTPException(status_code=409, detail="Printer is no longer idle.")
         # Consume authorization before dispatch: a timeout may still have started the job.
         _uploaded_slice = None
-        return control_job("start")
+        control_job("start")
+        observed = get_job()
+        current = (observed.get("job") or {}).get("file") or {}
+        verified = observed.get("state") == "Printing" and current.get("origin") == "local" and current.get("path") == req.filename
+        return {"ok": verified, "state": observed.get("state"), "filename": current.get("name"),
+                "message": "Printing verified" if verified else "Start requested; printing not yet verified. Check status before retrying."}
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Printer start unavailable.") from exc
+        raise HTTPException(status_code=502, detail="Start outcome uncertain; inspect the exact job before retrying.") from exc
 
 
 def confirmed_job_control(req, action):
@@ -602,7 +632,7 @@ class FactorsRequest(BaseModel):
 
 
 def _in_range(name: str, value: float, lo: float, hi: float) -> None:
-    if value < lo or value > hi:
+    if not math.isfinite(value) or value < lo or value > hi:
         raise HTTPException(status_code=400, detail=f"{name} must be between {lo} and {hi}")
 
 
@@ -708,6 +738,10 @@ def chat(req: ChatRequest, request: Request, response: Response):
     parent_id = _last_revision_id if req.phase == "revise" else None
 
     def build(args):
+        with _control_lock:
+            return build_locked(args)
+
+    def build_locked(args):
         nonlocal built
         global _last_revision_id, _last_slice
         if built:

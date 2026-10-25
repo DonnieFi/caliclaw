@@ -36,7 +36,7 @@ function callWorkbench(base, method, path, body) {
         });
       },
     );
-    req.setTimeout(15000, () => req.destroy(new Error("Workbench request timed out.")));
+    req.setTimeout(path === "/api/slice" ? 330000 : 15000, () => req.destroy(new Error("Workbench request timed out; inspect state before retrying")));
     req.on("error", reject);
     if (payload) req.write(payload);
     req.end();
@@ -44,7 +44,8 @@ function callWorkbench(base, method, path, body) {
 }
 
 function textResult(value) {
-  return { content: [{ type: "text", text: typeof value === "string" ? value : JSON.stringify(value) }] };
+  const isError = Boolean(value && (value.ok === false || value.status >= 400));
+  return { isError, details: value, content: [{ type: "text", text: typeof value === "string" ? value : JSON.stringify(value) }] };
 }
 
 module.exports = {

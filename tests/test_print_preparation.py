@@ -20,7 +20,7 @@ def prepared(tmp_path, monkeypatch):
     monkeypatch.setattr(poc_api, '_last_revision_id', 'rev-1')
     monkeypatch.setattr(poc_api, '_last_slice', None)
     monkeypatch.setattr(poc_api, '_uploaded_slice', None)
-    monkeypatch.setattr(poc_api, '_real_printer_status', lambda: {'source': 'octoprint', 'state': 'Operational', 'flags': {'operational': True}, 'simulated': False})
+    monkeypatch.setattr(poc_api, '_real_printer_status', lambda: {'source': 'octoprint', 'state': 'Operational', 'flags': {'operational': True}, 'simulated': False, 'hotend':{'actual':22}, 'bed':{'actual':23}})
     def slice_model(stl, selected):
         assert Path(selected).read_bytes() == profile.read_bytes()
         return SimpleNamespace(ok=True, gcode_path=str(gcode), estimates={'printing_time': '2m'}, profile_sha256=digest(selected))
@@ -43,7 +43,7 @@ def test_slice_upload_confirm_start_and_selected_file_binding(prepared, monkeypa
     assert poc_api._last_slice['mesh_sha256'] == digest(mesh)
     uploaded = poc_api.printer_upload()
     assert uploaded['uploaded'] and calls == ['upload']
-    req = poc_api.StartRequest(confirm=True, filename=uploaded['filename'], slice_id=uploaded['slice_id'])
+    req = poc_api.StartRequest(confirm=True, filename=uploaded['filename'], slice_id=uploaded['slice_id'], gcode_sha256=uploaded['gcode_sha256'])
     monkeypatch.setattr(poc_api, 'get_job', lambda: {'state': 'Operational', 'job': {'file': {'origin': 'local', 'path': 'other.gcode'}}})
     with pytest.raises(HTTPException):
         poc_api.printer_start(req)
@@ -116,7 +116,7 @@ def test_changed_printer_cannot_start(prepared, monkeypatch):
     uploaded = poc_api.printer_upload()
     monkeypatch.setenv('OCTOPRINT_BASE_URL', 'http://different-printer.invalid')
     with pytest.raises(HTTPException):
-        poc_api.printer_start(poc_api.StartRequest(confirm=True, filename=uploaded['filename'], slice_id=uploaded['slice_id']))
+        poc_api.printer_start(poc_api.StartRequest(confirm=True, filename=uploaded['filename'], slice_id=uploaded['slice_id'], gcode_sha256=uploaded['gcode_sha256']))
     assert prepared[3] == ['upload']
 
 

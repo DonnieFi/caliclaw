@@ -4,6 +4,12 @@
   "private": true,
   "description": "OpenClaw plugin for the CaliClaw printing workbench.",
   "openclaw": {
-    "extensions": ["./index.cjs"]
-  }
+    "extensions": [
+      "./index.cjs"
+    ]
+  },
+  "scripts": {
+    "test": "node --test tests/plugin.test.cjs"
+  },
+  "license": "MIT"
 }

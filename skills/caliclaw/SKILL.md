@@ -44,3 +44,16 @@ When a print is in progress, stay read-only: no serial commands, no mesh save, n
 ## Revisions
 
 Every successful edit is a new revision. Failed attempts stay in the run record. Restoring a revision rechecks slice provenance. Record the provider and model used for each call.
+
+## Printer workflow reference
+
+Before preparation, a controlled repeat, firmware/first-layer diagnosis, monitoring,
+or camera/login recovery, read [Printer workflows](printer-workflows.md). It ports
+the portable safeguards from our existing printer skills without publishing private
+host details or freezing historical calibration values. Unsupported operations are
+identified explicitly: guidance is not an implementation.
+
+Upload only the exact current slice via the workbench. Start confirmation binds
+`filename` and `gcode_sha256` from `/api/printer/preparation`; the backend rechecks
+revision, model/profile/overlay/G-code hashes and OctoPrint selection. Never invent
+these confirmation fields on the user's behalf. After a restart, upload again.

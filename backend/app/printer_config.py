@@ -127,9 +127,9 @@ def environment_printer():
     try:
         return PrinterConfig(id='environment', name='Environment printer', base_url=url,
                          api_key=os.environ.get('OCTOPRINT_API_KEY', ''),
-                         profile_path=os.environ.get('CALICLAW_PROFILE_PATH', ''),
+                         profile_path=(os.environ.get('CALICLAW_PROFILE_PATH') or os.environ.get('CALICLAW_SLICER_PROFILE', '')),
                          profile_sha256=os.environ.get('CALICLAW_PROFILE_SHA256', ''),
-                         overlay_path=os.environ.get('CALICLAW_OVERLAY_PATH', ''),
+                         overlay_path=(os.environ.get('CALICLAW_OVERLAY_PATH') or os.environ.get('CALICLAW_SLICER_OVERLAY', '')),
                          overlay_sha256=os.environ.get('CALICLAW_OVERLAY_SHA256', ''),
                          snapshot_url=os.environ.get('CALICLAW_SNAPSHOT_URL', ''),
                          local_log=os.environ.get('CALICLAW_PRINTER_LOG', ''))

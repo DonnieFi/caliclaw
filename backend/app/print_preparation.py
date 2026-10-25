@@ -19,12 +19,12 @@ def digest(path):
 def selected_profile():
     printer = active_printer()
     legacy = not config_path().exists()
-    configured = printer.profile_path if printer else os.environ.get('CALICLAW_PROFILE_PATH', '') if legacy else ''
+    configured = printer.profile_path if printer else (os.environ.get('CALICLAW_PROFILE_PATH') or os.environ.get('CALICLAW_SLICER_PROFILE', '')) if legacy else ''
     path = Path(configured) if configured else ROOT / 'profiles/ender3-proven-pla.ini'
     data = path.read_bytes()
     sha = hashlib.sha256(data).hexdigest()
     expected = printer.profile_sha256 if printer else os.environ.get('CALICLAW_PROFILE_SHA256', '') if legacy else ''
-    overlay_path = printer.overlay_path if printer else os.environ.get('CALICLAW_OVERLAY_PATH', '') if legacy else ''
+    overlay_path = printer.overlay_path if printer else (os.environ.get('CALICLAW_OVERLAY_PATH') or os.environ.get('CALICLAW_SLICER_OVERLAY', '')) if legacy else ''
     overlay_expected = printer.overlay_sha256 if printer else os.environ.get('CALICLAW_OVERLAY_SHA256', '') if legacy else ''
     overlay = Path(overlay_path).read_bytes() if overlay_path else None
     overlay_sha = hashlib.sha256(overlay).hexdigest() if overlay is not None else None
@@ -42,11 +42,11 @@ def profile_snapshot(profile):
     return path
 
 
-def validate_preparation(preparation, mesh_path, revision_id):
+def validate_preparation(preparation, mesh_path, revision_id, *, require_confirmed=True):
     if not preparation or not preparation.get('ok'):
         raise ValueError('Slice the checked part first.')
     profile = selected_profile()
-    if not profile['confirmed'] or not preparation.get('profile_confirmed'):
+    if require_confirmed and (not profile['confirmed'] or not preparation.get('profile_confirmed')):
         raise ValueError('A confirmed machine profile is required for live printing.')
     if profile['sha256'] != preparation['profile_sha256'] or profile['overlay_sha256'] != preparation.get('overlay_sha256'):
         raise ValueError('Profile changed. Slice again.')

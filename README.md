@@ -1,14 +1,12 @@
 # CaliClaw
 
-<p align="center">
-  <img src="mascot/workshop-hero.jpg" alt="A printing-bench poster. Pocket CaliClaw faces forward, square eyes and a raised claw, with the stepped tail behind him." width="880">
-</p>
+A local 3D-printing workbench and OpenClaw plugin. Brainstorm a part, build or import its mesh, prepare a reviewed slice, and keep measurements for the next revision.
 
 <p align="center">
-  Pocket CaliClaw on the bench. The staircase is the tail, and it sits on the back.<br>
-  <a href="https://www.thingiverse.com/thing:7424671">Thingiverse 7424671</a>
-  · 36 × 38 × 29 mm
+  <img src="assets/workbench.png" alt="CaliClaw studio interface: a light 3D build plate beside the conversation, model controls, and measurement drawer." width="1440">
 </p>
+
+The studio UI keeps the actual STL on a large light stage, with a compact Chat/Printer panel, camera presets, and explicit preparation actions. It adapts to desktop and mobile. This screenshot uses the real Pocket CaliClaw mesh with simulated backend responses; it is not evidence of a live print.
 
 A workbench for one functional part. You describe it, check the real mesh, print it, and write down what it actually did. The note stays with the project: the millimetres you measured, and the features that have to survive the next pass.
 
@@ -16,17 +14,17 @@ The browser is the bench. OpenClaw opens the same project through the `caliclaw`
 
 ## The loop
 
-**Design.** Say what the part has to do. Missing fit dimensions get asked for, and assumptions are labeled as assumptions. OpenSCAD builds a single solid. The mesh is checked on its own, so a tidy parameter list is not treated as proof.
+**Design.** Start in Brainstorm, then choose Design or Revise when ready to build. Say what the part has to do. Missing fit dimensions get asked for, and assumptions are labeled as assumptions. OpenSCAD builds a single solid. The mesh is checked on its own, so a tidy parameter list is not treated as proof.
 
-**Prepare.** Orientation looks for a stable flat base and less support, and you can override it. A slice belongs to one mesh hash and one profile hash. Change either one and that slice is no longer current.
+**Prepare.** Import an STL or inspect the generated mesh from Front, Top, and Iso views. Review the chosen orientation, profile and optional overlay before slicing. Each slice binds to the mesh, revision, printer and profile/overlay hashes; changing any of them invalidates preparation.
 
-**Print.** Status, camera, upload, start, pause, and cancel. Start, pause, resume and cancel require explicit confirmation and the artifact you already checked. If OctoPrint is not configured, the panel is marked simulated. Simulated controls never move hardware.
+**Print.** Review and download the generated G-code, then upload that checked slice. Start confirms the exact filename and G-code hash, checks live idle state and heater telemetry, and verifies the selected file. Start, pause, resume and cancel require explicit confirmation. If OctoPrint is not configured, the panel is marked simulated. Simulated controls never move hardware.
 
 **Learn.** Record the fit. "The USB opening is 2 mm too far right. Keep the mounting-hole spacing." The note is stored on the project and sent with the next design turn, so the change stays about that measurement.
 
 ## Print the mascot
 
-[Pocket CaliClaw](https://www.thingiverse.com/thing:7424671) is the calibration print for this shop: a compact claw, small enough to finish while you watch the first layers. It is an independent OpenClaw-inspired fan project, not an official model. The opening picture is a generated poster. This one is the real STL: the face is the flat front, and the steps are the tail on the back.
+[Pocket CaliClaw](https://www.thingiverse.com/thing:7424671) is the calibration print for this shop: a compact claw, small enough to finish while you watch the first layers. It is an independent OpenClaw-inspired fan project, not an official model. The workbench preview and image below show the real STL: the face is the flat front, and the steps are the tail on the back.
 
 <p align="center">
   <img src="mascot/pocket-caliclaw.png" alt="Pocket CaliClaw mesh, same scale. Front shows the face. Rear shows the stepped tail." width="720">
@@ -101,17 +99,43 @@ For diagnosis, set a collected local log path on each saved printer. For the env
 ## OpenClaw
 
 ```bash
-mkdir -p "$HOME/.openclaw/extensions"
-ln -s "$PWD" "$HOME/.openclaw/extensions/caliclaw"
+openclaw plugins install --link .
+openclaw plugins enable caliclaw
+openclaw plugins inspect caliclaw --runtime --json
 ```
 
-Restart the gateway so it reads `openclaw.plugin.json`. `baseUrl` defaults to `http://127.0.0.1:8000`. The plugin never receives the printer API key.
+Run the Python backend separately; plugin installation does not launch it. Configure `plugins.entries.caliclaw.config.baseUrl` if the workbench is not at the default `http://127.0.0.1:8000`, and ensure the Gateway can reach it. If you use a plugin allowlist, include `caliclaw`. After updating the plugin, run `openclaw plugins reload caliclaw --json` and verify a `status` tool call. The plugin never receives the printer API key.
+
+This CommonJS entry uses `register(api)` and declares its tool contract for discovery. Runtime registration has been checked with OpenClaw 2026.10.10-beta.3. The `plugins validate` command expects the newer authoring helper metadata; use runtime inspection and `npm test` for this entry.
 
 The `caliclaw` tool can list safe saved-printer summaries with `printers`, then `status`, `project`, `revisions`, `fit`, and `slice`. Start, pause, and cancel are not tool actions. During a print, log diagnosis stays read-only.
 
 The Printer panel offers read-only job and snapshot checks. Optional host checks use the selected printer’s configured SSH alias, camera service and Klipper log path. SSH configuration accepts identifiers and a log path; there is no user-supplied command. Failed checks report unavailable, and output is redacted before reaching the page. There is no terminal command input or chat access to host commands.
 
 After a failed snapshot, **Restart camera service** requires confirmation and a fresh known-idle live printer state. It uses the configured camera-only service with either non-interactive `/usr/sbin/service` or `systemctl`, then checks for a new JPEG. Recovery is disabled by default; select the method permitted on your host. Missing SSH/sudo permission is a refusal; it never restarts OctoPrint or reboots the host.
+
+## Runtime and verification
+
+Run one backend worker, bound to loopback on a trusted machine. The workbench has no authentication or multi-user isolation. Preparation and upload authority are process-local; after restarting the backend, upload the checked slice again. Other OctoPrint clients can change printer selection or state: CaliClaw rechecks immediately before dispatch, but OctoPrint has no atomic compare-and-start operation.
+
+Upload transfers only the server's current checked slice; it does not accept arbitrary G-code files. Start confirms the uploaded filename and G-code SHA-256 and reports whether the exact job was observed Printing. An accepted request is not proof that printing started. After an uncertain response, inspect the exact job before retrying. Live upload/start require fresh plausible heater telemetry. The workbench does not verify physical bed clearance, firmware preparation, adhesion or fit, and does not schedule camera monitoring.
+
+```bash
+python3 -m pytest -q
+npm test
+node scripts/plugin_smoke.cjs
+python3 scripts/toolchain_smoke.py
+```
+
+The browser regression script uses fixture responses, including printer discovery and setup. To run it in a development environment:
+
+```bash
+pip install playwright
+python3 -m playwright install chromium
+python3 scripts/ui_smoke.py /tmp/caliclaw-ui-check
+```
+
+These checks do not certify a physical printer run. The bundled [printer workflow guide](skills/caliclaw/printer-workflows.md) describes setup review, controlled repeats, firmware-aware preparation and recovery boundaries. Physical print/measurement validation remains separate.
 
 ## Safety
 
@@ -125,7 +149,8 @@ After a failed snapshot, **Restart camera service** requires confirmation and a 
 
 | Path | What it is |
 |---|---|
-| `web/` | The bench: mesh preview, chat, fit notes, printer status |
+| `web/` | Studio UI: mesh preview, chat, fit notes, printer discovery/setup and status |
+| `assets/` | Sanitized README screenshots |
 | `backend/` | FastAPI and SQLite: revisions, OpenSCAD, PrusaSlicer, OctoPrint |
 | `index.cjs` | The OpenClaw plugin |
 | `skills/caliclaw/` | When the agent should call the bench, and when it should not |
@@ -133,10 +158,10 @@ After a failed snapshot, **Restart camera service** requires confirmation and a 
 | `profiles/` | Slicer fixtures |
 | `fixtures/`, `eval/` | Synthetic geometry and log cases |
 
-Planning notes stay in local `docs/` and are gitignored.
+Planning notes stay in local `docs/` and are gitignored. Private printer configuration, `.env`, database files and sidecars, logs, Beads issue exports and interaction history, generated evaluations, and local tool caches are excluded from Git. Ignore rules do not remove material already present in older commits; review the complete history before changing repository visibility or making a public release. GitHub visibility and npm publication are separate; `package.json` remains `private: true`.
 
 ## License
 
-The workbench code does not have a chosen license yet.
+The workbench code is licensed under the [MIT License](LICENSE). Mascot assets retain their separate license below.
 
 Pocket CaliClaw is Copyright (c) 2026 donniefi, under the [BSD 2-Clause License](mascot/LICENSE). That covers `mascot/CaliClaw_Pocket_v1.stl` and the preview rendered from it. The listing is [thing:7424671](https://www.thingiverse.com/thing:7424671).
