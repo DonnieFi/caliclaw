@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from .collector import SimulatedPrinterState
+from .printer_logs import get_log_events
 from .db import init_db
 from .fit import fit_memory_text, project_snapshot, record_fit
 from .octoprint import (
@@ -457,15 +458,14 @@ def chat(req: ChatRequest, request: Request, response: Response):
         return _real_printer_status()
 
     def log_events(args):
-        p = ROOT / "eval/fixtures/log-001.txt"
-        return {"log": p.read_text() if p.exists() else ""}
+        return get_log_events()
 
     tools = {"build_model": build, "slice_model": slice_fixed, "get_printer_status": printer_status, "get_log_events": log_events}
     schemas = [
         {"type": "function", "function": {"name": "build_model", "description": "Compile OpenSCAD to a validated STL.", "parameters": {"type": "object", "properties": {"scad": {"type": "string"}}, "required": ["scad"]}}},
         {"type": "function", "function": {"name": "slice_model", "description": "Slice the checked bracket STL with the pinned profile.", "parameters": {"type": "object", "properties": {}}}},
         {"type": "function", "function": {"name": "get_printer_status", "description": "Get printer status.", "parameters": {"type": "object", "properties": {}}}},
-        {"type": "function", "function": {"name": "get_log_events", "description": "Read Pi log events.", "parameters": {"type": "object", "properties": {}}}},
+        {"type": "function", "function": {"name": "get_log_events", "description": "Read configured collected printer logs, or report unavailable. Check source_updated_at; logs may be stale.", "parameters": {"type": "object", "properties": {}}}},
     ]
     history = [m for m in _sessions.setdefault(session_id, []) if m.get("role") != "system"]
     prompt = [{"role": "system", "content": WORKBENCH_BRIEF}]

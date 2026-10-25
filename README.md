@@ -86,6 +86,8 @@ Design chat needs `CALICLAW_API_KEY`. Recording a fit, reading status, and slici
 
 `profiles/` contains an Ender-3 sized PrusaSlicer fixture for tests. It does not certify a physical printer. Point the bench at a profile you have actually printed with before you trust a time estimate.
 
+For diagnosis, optionally set `CALICLAW_PRINTER_LOG` to a local text log collected from your printer. The tool reads at most the last 64 KiB, redacts secret-like fields and URLs, and reports the file update time. It does not fetch logs over SSH or assume the snapshot is current. Without a readable configured source, it reports that logs are unavailable; evaluation fixtures are never the default source.
+
 ## OpenClaw
 
 ```bash
