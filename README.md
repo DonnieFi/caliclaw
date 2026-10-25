@@ -101,6 +101,10 @@ Restart the gateway so it reads `openclaw.plugin.json`. `baseUrl` defaults to `h
 
 The `caliclaw` tool can `status`, `project`, `revisions`, `fit`, and `slice`. Start, pause, and cancel are not tool actions. During a print, log diagnosis stays read-only.
 
+The Printer panel also offers fixed read-only host checks through the existing `octopi` SSH alias: job state, snapshot format, `webcamd.service` status/logs, and recent Klipper log evidence. Failed checks report unavailable, and output is redacted before reaching the page. There is no terminal command input or chat access to host commands.
+
+After a failed snapshot, **Restart camera service** requires confirmation and a fresh known-idle live printer state. It runs only `sudo -n systemctl restart webcamd.service`, then checks for a new JPEG. Missing SSH/sudo permission is a refusal; it never restarts OctoPrint or reboots the host.
+
 ## Safety
 
 - No firmware flashing, no controller replacement, and no unattended printing.

@@ -1,0 +1,79 @@
+"""Fixed printer-host evidence checks. No shell or path input from clients/models."""
+import json
+import os
+import re
+import subprocess
+
+from .collector import redact_text
+from .octoprint import camera_snapshot, get_job
+
+HOST = 'octopi'
+SSH = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', HOST]
+READ_COMMANDS = {
+    'camera_service': 'systemctl show webcamd.service --property=ActiveState,SubState --no-pager',
+    'camera_logs': 'journalctl -u webcamd.service -n 30 --no-pager -o cat | head -c 16384',
+    'klipper_log': 'for p in /tmp/klippy.log /home/pi/printer_data/logs/klippy.log; do if test -r "$p"; then tail -n 50 "$p" | head -c 16384; exit; fi; done; exit 1',
+}
+CHECK_NAMES = ('job_state', 'snapshot', *READ_COMMANDS)
+
+
+def safe_output(text):
+    # Redact actual configured credentials before general patterns.
+    for name, value in os.environ.items():
+        if value and len(value) >= 4 and any(s in name.lower() for s in ('key', 'token', 'password', 'secret')):
+            text = text.replace(value, '<redacted>')
+    text = re.sub(r'''(?i)(["']?(?:api[_-]?key|token|password|secret|authorization)["']?\s*[:=]\s*)(?:"[^"\n]*"|'[^'\n]*'|[^\s,}]+)''', r'\1<redacted>', text)
+    text = redact_text(text)
+    text = re.sub(r'https?://[^\s<>]+', '<address>', text)
+    text = re.sub(r'\b(?:\d{1,3}\.){3}\d{1,3}\b|\b(?:[0-9a-fA-F]{0,4}:){2,}[0-9a-fA-F:]+\b', '<address>', text)
+    text = re.sub(r'\b[\w-]+(?:\.[\w-]+)*\.(?:local|lan|com|net|org|io)\b', '<host>', text)
+    text = re.sub(r'\b(?:octopi|localhost)\b', '<host>', text, flags=re.I)
+    return text[:16384]
+
+
+def run_check(name):
+    if name not in CHECK_NAMES:
+        raise ValueError('Unknown host check.')
+    try:
+        if name == 'job_state':
+            job = get_job()
+            text = json.dumps({'state': job.get('state', 'Unknown'), 'progress': job.get('progress')})
+            code = 0
+        elif name == 'snapshot':
+            data = camera_snapshot()
+            code = 0 if data.startswith(b'\xff\xd8\xff') else 1
+            text = 'JPEG snapshot available.' if code == 0 else 'Snapshot unavailable.'
+        else:
+            result = subprocess.run(SSH + [READ_COMMANDS[name]], capture_output=True, text=True, timeout=12)
+            code = result.returncode
+            text = result.stdout if code == 0 else 'Check unavailable.'
+        return {'name': name, 'exit': code, 'output': safe_output(text), 'available': code == 0}
+    except (OSError, subprocess.TimeoutExpired, RuntimeError, ValueError):
+        return {'name': name, 'exit': None, 'output': 'Check unavailable.', 'available': False}
+    except Exception:
+        # Client/network errors must not reveal connection strings or credentials.
+        return {'name': name, 'exit': None, 'output': 'Check unavailable.', 'available': False}
+
+
+def known_idle(status):
+    flags = status.get('flags') or {}
+    return (not status.get('simulated') and status.get('source') == 'octoprint'
+            and status.get('state', '').lower() in ('operational', 'ready', 'idle')
+            and flags.get('operational') is True
+            and not any(flags.get(key) for key in ('printing', 'paused', 'pausing', 'cancelling', 'finishing', 'error', 'closedOrError')))
+
+
+def restart_camera(status_reader):
+    if not known_idle(status_reader()):
+        raise ValueError('Camera recovery requires a known-idle printer.')
+    if run_check('snapshot')['available']:
+        return {'restarted': False, 'snapshot_available': True}
+    if not known_idle(status_reader()):
+        raise ValueError('Printer state changed. Camera recovery refused.')
+    try:
+        result = subprocess.run(SSH + ['sudo -n systemctl restart webcamd.service'], capture_output=True, timeout=15)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ValueError('Camera service restart unavailable.') from exc
+    if result.returncode != 0:
+        raise ValueError('Camera service restart was not permitted.')
+    return {'restarted': True, 'snapshot_available': run_check('snapshot')['available']}

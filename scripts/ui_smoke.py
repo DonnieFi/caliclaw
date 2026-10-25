@@ -31,6 +31,8 @@ def main():
                     req.abort()
                 else:
                     req.fulfill(json={'simulated': True, 'state': 'Idle', 'source': 'simulated', 'temperature': 24, 'bed_temperature': 22})
+            elif path.startswith('/api/host/checks/'):
+                req.fulfill(json={'name': path.rsplit('/', 1)[-1], 'exit': None, 'output': 'Check unavailable.', 'available': False})
             elif path == '/api/project':
                 req.fulfill(json={'name': 'Workshop', 'fit': state['notes'], 'keep': ['hole spacing'] if state['notes'] else []})
             elif path == '/api/stl/import':
@@ -72,6 +74,11 @@ def main():
         page.evaluate('refreshCamera()')
         expect(page.locator('#camNote')).to_have_text('Snapshot unavailable.')
         expect(page.locator('#cam')).to_be_hidden()
+        expect(page.locator('#cameraRestart')).to_be_disabled()
+        page.locator('.host-checks summary').click()
+        page.locator('#hostCheckBtn').click()
+        expect(page.locator('#hostTranscript')).to_contain_text('klipper_log')
+        expect(page.locator('#hostCheckBtn')).to_be_enabled()
         state['camera_fail'] = False
         state['printer_fail'] = True
         previous = state['camera_calls']
@@ -87,6 +94,7 @@ def main():
         page.locator('#fitKeep').fill('hole spacing')
         page.locator('#fitBtn').click()
         expect(page.locator('#fitList')).to_contain_text('Hole was 0.4 mm tight')
+        page.locator('#phase').select_option('revise')
         page.locator('#input').fill('Revise the hole')
         page.locator('#input').press('Enter')
         expect(page.locator('#revList')).to_contain_text('revision-test-')

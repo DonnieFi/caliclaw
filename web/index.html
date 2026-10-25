@@ -345,6 +345,9 @@
   .ctrls button { border-radius: 10px; }
   .wide { margin-top: 10px; }
   .cam-wrap { margin-top: 16px; }
+  .host-checks { margin-top: 20px; }
+  .host-checks summary { cursor: pointer; font-weight: 800; }
+  #hostTranscript { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--denim-deep); color: var(--cream); padding: 16px; border-radius: 10px; max-height: 280px; overflow: auto; font-size: 12px; }
   #cam { height: auto; max-height: 240px; object-fit: contain; }
   #camNote:not([hidden]) { padding: 20px 12px; background: var(--sand); border-radius: 10px; }
   .bubble { max-width: 88%; }
@@ -519,41 +522,48 @@
       <div class="cam-wrap">
         <img id="cam" alt="Printer camera" hidden />
         <p id="camNote" hidden></p>
+        <button type="button" class="ghost wide" id="cameraRestart" hidden disabled>Restart camera service</button>
       </div>
+      <details class="host-checks">
+        <summary>Read-only host checks</summary>
+        <p class="hint">Fixed checks for the job, camera service and Klipper log.</p>
+        <button type="button" class="ghost" id="hostCheckBtn">Run checks</button>
+        <pre id="hostTranscript" aria-live="polite">No checks run yet.</pre>
+      </details>
       <div class="settings">
         <label>Nozzle target °C
           <span class="set-row">
-            <input id="toolTarget" type="number" min="0" max="280" step="1" inputmode="numeric" />
-            <button type="button" class="ghost" id="toolBtn">Set</button>
+            <input id="toolTarget" disabled type="number" min="0" max="280" step="1" inputmode="numeric" />
+            <button type="button" class="ghost" id="toolBtn" disabled>Set</button>
           </span>
         </label>
         <label>Bed target °C
           <span class="set-row">
-            <input id="bedTarget" type="number" min="0" max="120" step="1" inputmode="numeric" />
-            <button type="button" class="ghost" id="bedBtn">Set</button>
+            <input id="bedTarget" disabled type="number" min="0" max="120" step="1" inputmode="numeric" />
+            <button type="button" class="ghost" id="bedBtn" disabled>Set</button>
           </span>
         </label>
         <label>Speed %
           <span class="set-row">
-            <input id="feedTarget" type="number" min="10" max="200" step="1" inputmode="numeric" placeholder="100" />
-            <button type="button" class="ghost" id="feedBtn">Set</button>
+            <input id="feedTarget" disabled type="number" min="10" max="200" step="1" inputmode="numeric" placeholder="100" />
+            <button type="button" class="ghost" id="feedBtn" disabled>Set</button>
           </span>
         </label>
         <label>Flow %
           <span class="set-row">
-            <input id="flowTarget" type="number" min="10" max="200" step="1" inputmode="numeric" placeholder="100" />
-            <button type="button" class="ghost" id="flowBtn">Set</button>
+            <input id="flowTarget" disabled type="number" min="10" max="200" step="1" inputmode="numeric" placeholder="100" />
+            <button type="button" class="ghost" id="flowBtn" disabled>Set</button>
           </span>
         </label>
       </div>
       <p class="settings-note">0 turns a heater off. Speed and flow stay between 10 and 200, and they have no live readout. These controls do nothing while the printer is simulated.</p>
       <p class="dash-note" id="dashNote" role="status"></p>
       <div class="ctrls">
-        <button type="button" id="startBtn">Start</button>
-        <button type="button" id="pauseBtn">Pause</button>
-        <button type="button" id="cancelBtn">Cancel</button>
+        <button type="button" id="startBtn" disabled>Start</button>
+        <button type="button" id="pauseBtn" disabled>Pause</button>
+        <button type="button" id="cancelBtn" disabled>Cancel</button>
       </div>
-      <button type="button" class="ghost wide" id="uploadBtn">Upload gcode</button>
+      <button type="button" class="ghost wide" id="uploadBtn" disabled>Upload gcode</button>
       <button type="button" class="ghost wide" id="simulateBtn" hidden>Play a simulated job</button>
     </div>
   </section>
@@ -613,8 +623,18 @@ function tempReadout(block, flat) {
 const cam = document.getElementById('cam');
 const camNote = document.getElementById('camNote');
 let camBusy = false;
+let cameraFailed = false;
+let printerIdle = false;
+function updateCameraRecovery() {
+  const button = document.getElementById('cameraRestart');
+  button.hidden = !cameraFailed;
+  button.disabled = !printerIdle;
+  button.title = printerIdle ? 'Restart only the camera service.' : 'Requires a known-idle live printer.';
+}
 let camUrl = '';
 cam.addEventListener('error', () => {
+  cameraFailed = true;
+  updateCameraRecovery();
   cam.hidden = true;
   camNote.hidden = false;
   camNote.textContent = 'Snapshot unavailable.';
@@ -635,6 +655,7 @@ async function refreshCamera() {
     cam.src = camUrl;
     cam.hidden = false;
     camNote.hidden = true;
+    cameraFailed = false;
   } catch (err) {
     cam.hidden = true;
     if (camUrl) {
@@ -645,6 +666,8 @@ async function refreshCamera() {
     camNote.hidden = false;
     camNote.textContent = 'Snapshot unavailable.';
   } finally {
+    cameraFailed = !camNote.hidden;
+    updateCameraRecovery();
     camBusy = false;
   }
 }
@@ -683,9 +706,13 @@ let resumeMode = false;
 async function pollPrinter() {
   try {
     const res = await fetch('/api/printer');
+    if (!res.ok) throw new Error('Printer status unavailable.');
     const data = await res.json();
     const simulated = Boolean(data.simulated) || String(data.source || '').indexOf('simulated') === 0;
     const state = data.state || '—';
+    const flags = data.flags || {};
+    printerIdle = !simulated && data.source === 'octoprint' && /^(operational|ready|idle)$/i.test(state) && flags.operational === true && !['printing','paused','pausing','cancelling','finishing','error','closedOrError'].some(key => flags[key]);
+    updateCameraRecovery();
     const kind = /print/i.test(state) ? 'printing' : /pause/i.test(state) ? 'paused' : /error|disconnect|stale/i.test(state) ? 'bad' : 'idle';
     paintState(document.getElementById('pState'), state, kind);
     paintState(document.getElementById('stageState'), state, kind);
@@ -729,9 +756,43 @@ async function pollPrinter() {
     }
     document.getElementById('simulateBtn').hidden = !simulated;
   } catch (err) {
+    printerIdle = false;
+    updateCameraRecovery();
+    for (const id of ['startBtn', 'pauseBtn', 'cancelBtn', 'uploadBtn', 'toolTarget', 'toolBtn', 'bedTarget', 'bedBtn', 'feedTarget', 'feedBtn', 'flowTarget', 'flowBtn']) document.getElementById(id).disabled = true;
+    paintState(document.getElementById('pState'), 'Unavailable', 'bad');
+    paintState(document.getElementById('stageState'), 'Unavailable', 'bad');
     console.error(err);
   }
 }
+document.getElementById('hostCheckBtn').onclick = async () => {
+  const button = document.getElementById('hostCheckBtn');
+  const transcript = document.getElementById('hostTranscript');
+  button.disabled = true;
+  transcript.textContent = '';
+  try {
+    for (const name of ['job_state', 'snapshot', 'camera_service', 'camera_logs', 'klipper_log']) {
+      transcript.textContent += name + '…\n';
+      try {
+        const res = await fetch('/api/host/checks/' + name);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        transcript.textContent += 'exit: ' + (data.exit ?? 'unavailable') + '\n' + data.output + '\n\n';
+      } catch (_) { transcript.textContent += 'Check unavailable.\n\n'; }
+    }
+  } finally { button.disabled = false; }
+};
+document.getElementById('cameraRestart').onclick = async () => {
+  if (!confirm('Restart only the camera service? The printer must be idle.')) return;
+  const button = document.getElementById('cameraRestart');
+  button.disabled = true;
+  try {
+    const res = await fetch('/api/camera/restart', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({confirm: true}) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(safeDetail(data, 'Camera recovery unavailable.'));
+    await refreshCamera();
+  } catch (err) { camNote.textContent = err.message || 'Camera recovery unavailable.'; }
+  finally { updateCameraRecovery(); }
+};
 pollPrinter();
 setInterval(pollPrinter, 3000);
 refreshCamera();

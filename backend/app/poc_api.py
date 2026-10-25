@@ -15,6 +15,7 @@ from .collector import SimulatedPrinterState
 from .printer_logs import get_log_events
 from .db import init_db
 from .geometry import validate_stl
+from .host_checks import CHECK_NAMES, run_check, restart_camera
 from .parts import save_part
 from .cad_revision import build_revision
 from .conversations import load_conversation, save_conversation
@@ -148,7 +149,7 @@ def _real_printer_status():
         s = printer.to_dict()
         s["source"] = "simulated (octoprint unavailable)"
         s["simulated"] = True
-        s["error"] = str(exc)
+        s["error"] = "Printer status unavailable."
         return s
 
 
@@ -308,9 +309,27 @@ def slice_now():
     return _last_slice
 
 
+@router.get("/host/checks/{name}")
+def host_check(name: str):
+    try:
+        return run_check(name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Unknown host check.") from exc
+
+
 # OctoPrint explicit controls (require confirm=true for risky actions)
 class ControlRequest(BaseModel):
     confirm: bool = False
+
+
+@router.post("/camera/restart")
+def camera_restart(req: ControlRequest):
+    if not req.confirm:
+        raise HTTPException(status_code=400, detail="Confirm camera service restart first.")
+    try:
+        return restart_camera(_real_printer_status)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/printer/upload")
