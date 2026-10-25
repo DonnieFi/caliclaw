@@ -557,13 +557,14 @@
         </label>
       </div>
       <p class="settings-note">0 turns a heater off. Speed and flow stay between 10 and 200, and they have no live readout. These controls do nothing while the printer is simulated.</p>
+      <p class="settings-note" id="preparationNote">Slice the checked part first.</p>
       <p class="dash-note" id="dashNote" role="status"></p>
       <div class="ctrls">
         <button type="button" id="startBtn" disabled>Start</button>
         <button type="button" id="pauseBtn" disabled>Pause</button>
         <button type="button" id="cancelBtn" disabled>Cancel</button>
       </div>
-      <button type="button" class="ghost wide" id="uploadBtn" disabled>Upload gcode</button>
+      <button type="button" class="ghost wide" id="uploadBtn" disabled>Upload checked slice</button>
       <button type="button" class="ghost wide" id="simulateBtn" hidden>Play a simulated job</button>
     </div>
   </section>
@@ -703,6 +704,17 @@ function targetNumber(block, flat) {
 }
 
 let resumeMode = false;
+let preparation = {};
+async function refreshPreparation() {
+  try {
+    const res = await fetch('/api/slice/current');
+    if (!res.ok) throw new Error();
+    preparation = await res.json();
+    document.getElementById('preparationNote').textContent = preparation.profile + '. ' + preparation.reason;
+  } catch (_) { preparation = {}; }
+  document.getElementById('uploadBtn').disabled = !printerIdle || !preparation.ready;
+  document.getElementById('startBtn').disabled = !printerIdle || !preparation.uploaded;
+}
 async function pollPrinter() {
   try {
     const res = await fetch('/api/printer');
@@ -755,6 +767,7 @@ async function pollPrinter() {
       control.title = simulated ? 'Simulated printer. This does not move the machine.' : '';
     }
     document.getElementById('simulateBtn').hidden = !simulated;
+    await refreshPreparation();
   } catch (err) {
     printerIdle = false;
     updateCameraRecovery();
@@ -896,32 +909,19 @@ async function postControl(url, body) {
 }
 
 document.getElementById('startBtn').onclick = () => {
-  if (!confirm('Start this print on the printer?')) return;
-  postControl('/api/printer/start', { confirm: true });
+  if (!preparation.uploaded || !confirm('Start ' + preparation.filename + ' on the printer?')) return;
+  postControl('/api/printer/start', { confirm: true, filename: preparation.filename, slice_id: preparation.slice_id });
 };
 document.getElementById('cancelBtn').onclick = () => {
   if (!confirm('Cancel the print on the printer?')) return;
   postControl('/api/printer/cancel', { confirm: true });
 };
 document.getElementById('pauseBtn').onclick = () => {
-  postControl(resumeMode ? '/api/printer/resume' : '/api/printer/pause');
+  if (!confirm(resumeMode ? 'Resume the paused print?' : 'Pause the current print?')) return;
+  postControl(resumeMode ? '/api/printer/resume' : '/api/printer/pause', {confirm: true});
 };
 document.getElementById('simulateBtn').onclick = () => postControl('/api/simulate/start');
-document.getElementById('uploadBtn').onclick = () => {
-  const picker = document.createElement('input');
-  picker.type = 'file';
-  picker.accept = '.gcode,.gco,.g';
-  picker.onchange = async () => {
-    const file = picker.files && picker.files[0];
-    if (!file) return;
-    const body = new FormData();
-    body.append('file', file);
-    const res = await fetch('/api/printer/upload', { method: 'POST', body });
-    const data = await res.json().catch(() => ({}));
-    document.getElementById('dashNote').textContent = res.ok ? 'Uploaded ' + file.name : safeDetail(data, 'Upload failed.');
-  };
-  picker.click();
-};
+document.getElementById('uploadBtn').onclick = () => postControl('/api/printer/upload');
 
 document.getElementById('importBtn').onclick = () => document.getElementById('stlFile').click();
 document.getElementById('stlFile').onchange = async (event) => {
@@ -941,6 +941,7 @@ document.getElementById('stlFile').onchange = async (event) => {
     if (window.loadSTL) await window.loadSTL(data.stl_url, true);
     await loadRevisions();
     await loadProject();
+    await refreshPreparation();
   } catch (err) {
     status.textContent = err.message || 'STL import failed. The plate is unchanged.';
   } finally {
@@ -961,7 +962,8 @@ document.getElementById('sliceBtn').onclick = async () => {
       return;
     }
     const estimate = data.estimates && data.estimates.printing_time;
-    status.textContent = estimate || data.error || 'Sliced.';
+    status.textContent = (estimate || 'Sliced.') + ' ' + (data.profile || '');
+    await refreshPreparation();
   } finally {
     button.disabled = false;
   }

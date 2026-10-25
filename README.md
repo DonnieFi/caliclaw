@@ -86,7 +86,9 @@ Chat starts in **Brainstorm**, where build and slice tools are unavailable. Choo
 
 CAD builds store the full source and named numeric dimensions. Fit notes can include measured values and exact dimension names to keep. Revise refuses changed or missing kept dimensions before compiling, and a failed build leaves the current part unchanged. Imported meshes retain their original bytes and can be downloaded from revision history; they are not treated as recovered parametric CAD.
 
-`profiles/` contains an Ender-3 sized PrusaSlicer fixture for tests. It does not certify a physical printer. Point the bench at a profile you have actually printed with before you trust a time estimate.
+`profiles/` contains an Ender-3 sized 0.4 mm PrusaSlicer fixture for preparation tests only. Live upload and Start remain blocked until you set `CALICLAW_PROFILE_PATH` to your validated machine profile and `CALICLAW_PROFILE_SHA256` to its exact SHA-256. Confirm the physical nozzle and start/end G-code before configuring these values. The bench snapshots those exact profile bytes for slicing and applies no implicit speed overlay.
+
+Slice the current part, review the estimate/profile label, then use **Upload checked slice**. **Start** asks you to confirm the generated filename and verifies OctoPrint still has that file selected. A changed part, profile, or G-code invalidates preparation. Pause, resume, and cancel each require confirmation. These controls work without a model key.
 
 For diagnosis, optionally set `CALICLAW_PRINTER_LOG` to a local text log collected from your printer. The tool reads at most the last 64 KiB, redacts secret-like fields and URLs, and reports the file update time. It does not fetch logs over SSH or assume the snapshot is current. Without a readable configured source, it reports that logs are unavailable; evaluation fixtures are never the default source.
 

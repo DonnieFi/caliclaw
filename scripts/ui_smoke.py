@@ -35,6 +35,8 @@ def main():
                 req.fulfill(json={'name': path.rsplit('/', 1)[-1], 'exit': None, 'output': 'Check unavailable.', 'available': False})
             elif path == '/api/project':
                 req.fulfill(json={'name': 'Workshop', 'fit': state['notes'], 'keep': ['hole spacing'] if state['notes'] else []})
+            elif path == '/api/slice/current':
+                req.fulfill(json={'profile': '0.4 mm fixture (not for live printing)', 'ready': False, 'uploaded': False, 'reason': 'A confirmed machine profile is required for live printing.'})
             elif path == '/api/stl/import':
                 req.fulfill(json={'revision_id': 'import-test', 'stl_url': '/fixtures/cube.stl'})
             elif path == '/api/revisions':

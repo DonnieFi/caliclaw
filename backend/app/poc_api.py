@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import threading
 from pathlib import Path
 from typing import Optional, Literal
 
@@ -15,7 +16,8 @@ from .collector import SimulatedPrinterState
 from .printer_logs import get_log_events
 from .db import init_db
 from .geometry import validate_stl
-from .host_checks import CHECK_NAMES, run_check, restart_camera
+from .host_checks import CHECK_NAMES, run_check, restart_camera, known_idle
+from .print_preparation import selected_profile, profile_snapshot, digest, validate_preparation, printer_identity
 from .parts import save_part
 from .cad_revision import build_revision
 from .conversations import load_conversation, save_conversation
@@ -54,6 +56,8 @@ ROOT = Path(__file__).resolve().parents[2]
 _last_stl: dict[str, str] = {}
 _last_revision_id: str | None = None
 _last_slice: dict | None = None
+_uploaded_slice: dict | None = None
+_control_lock = threading.Lock()
 _sessions: dict[str, list[dict]] = {}
 _session_messages: list[dict] = []
 
@@ -284,29 +288,60 @@ def revisions():
     return out
 
 
+def preparation_view():
+    try:
+        profile = selected_profile()
+        label = profile["label"]
+    except (OSError, ValueError):
+        label = "Profile unavailable"
+    reason = "Slice the checked part first."
+    ready = False
+    try:
+        validate_preparation(_last_slice, _last_stl.get("current"), _last_revision_id)
+        ready = True
+        reason = "Checked slice ready to upload."
+    except (ValueError, OSError, KeyError) as exc:
+        reason = str(exc) if isinstance(exc, ValueError) else "Preparation unavailable. Slice again."
+    uploaded = bool(ready and _uploaded_slice and _last_slice and _uploaded_slice.get("slice_id") == _last_slice.get("id") and _uploaded_slice.get("printer_id") == printer_identity())
+    return {"profile": label, "ready": ready, "uploaded": uploaded, "reason": reason,
+            "filename": _uploaded_slice["filename"] if uploaded else None,
+            "slice_id": _last_slice.get("id") if _last_slice else None,
+            "estimates": _last_slice.get("estimates", {}) if _last_slice else {}}
+
+
 @router.get("/slice/current")
 def slice_current():
-    if _last_slice is None:
-        raise HTTPException(status_code=404, detail="no slice available")
-    return _last_slice
+    return preparation_view()
 
 
 @router.post("/slice")
 def slice_now():
-    global _last_slice
+    global _last_slice, _uploaded_slice
     stl = _last_stl.get("current")
     if not stl or not Path(stl).exists():
-        raise HTTPException(status_code=400, detail="no checked STL available; build first")
-    r = slice_model(stl, str(ROOT / "profiles/ender3-proven-pla.ini"), overlay_path=str(ROOT / "profiles/ender3-speed-preference.ini"))
+        raise HTTPException(status_code=400, detail="No checked STL available; build or import first.")
+    _uploaded_slice = None
+    _last_slice = None
+    try:
+        profile = selected_profile()
+        snapshot = profile_snapshot(profile)
+        mesh_hash = digest(stl)
+        r = slice_model(stl, str(snapshot))
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Slicer or profile unavailable.") from exc
+    finally:
+        if 'snapshot' in locals():
+            snapshot.unlink(missing_ok=True)
+            snapshot.parent.rmdir()
+    if not r.ok or not r.gcode_path:
+        raise HTTPException(status_code=400, detail="Slice failed. Check the part and profile.")
     _last_slice = {
-        "ok": r.ok,
-        "error": r.error,
-        "estimates": r.estimates,
-        "gcode_path": r.gcode_path,
-        "profile_sha256": r.profile_sha256,
-        "revision_id": _last_revision_id,
+        "id": uuid.uuid4().hex, "ok": True, "error": None,
+        "estimates": r.estimates, "gcode_path": r.gcode_path,
+        "profile_sha256": profile["sha256"], "profile_confirmed": profile["confirmed"],
+        "mesh_sha256": mesh_hash, "gcode_sha256": digest(r.gcode_path), "revision_id": _last_revision_id,
     }
-    return _last_slice
+    return {"ok": True, **preparation_view()}
 
 
 @router.get("/host/checks/{name}")
@@ -332,53 +367,97 @@ def camera_restart(req: ControlRequest):
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.post("/printer/upload")
-async def printer_upload(file: UploadFile = File(...)):
-    safe_name = Path(file.filename or "upload.gcode").name
-    if not safe_name or safe_name in (".", ".."):
-        raise HTTPException(status_code=400, detail="invalid filename")
-    tmp_dir = Path(tempfile.mkdtemp())
-    tmp = tmp_dir / safe_name
-    tmp.write_bytes(await file.read())
+def checked_preparation():
     try:
-        res = upload_file(tmp, safe_name, print_after=False)
-        return res
+        validate_preparation(_last_slice, _last_stl.get("current"), _last_revision_id)
+    except (OSError, ValueError, KeyError) as exc:
+        detail = str(exc) if isinstance(exc, ValueError) else "Preparation unavailable. Slice again."
+        raise HTTPException(status_code=409, detail=detail) from exc
+    return _last_slice
+
+
+@router.post("/printer/upload")
+def printer_upload():
+    global _uploaded_slice
+    preparation = checked_preparation()
+    if not known_idle(_real_printer_status()):
+        raise HTTPException(status_code=409, detail="Upload requires a known-idle live printer.")
+    _uploaded_slice = None
+    filename = "caliclaw-" + preparation["id"] + ".gcode"
+    try:
+        result = upload_file(preparation["gcode_path"], filename, print_after=False)
+        remote = result.get("files", {}).get("local", {})
+        if remote.get("name") != filename or remote.get("path", filename) != filename:
+            raise ValueError("upload identity mismatch")
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail="Checked slice upload could not be verified.") from exc
+    _uploaded_slice = {"slice_id": preparation["id"], "filename": filename, "printer_id": printer_identity()}
+    return preparation_view()
+
+
+class StartRequest(ControlRequest):
+    filename: str = ""
+    slice_id: str = ""
 
 
 @router.post("/printer/start")
-def printer_start(req: ControlRequest):
+def printer_start(req: StartRequest):
+    with _control_lock:
+        return _start_checked_print(req)
+
+
+def _start_checked_print(req):
+    global _uploaded_slice
     if not req.confirm:
         raise HTTPException(status_code=400, detail="confirm=true required")
-    if not _last_stl.get("current"):
-        raise HTTPException(status_code=400, detail="no checked preparation available")
-    status = _real_printer_status()
-    if status.get("simulated"):
-        raise HTTPException(status_code=400, detail="simulated printer cannot start live hardware")
+    preparation = checked_preparation()
+    if not _uploaded_slice or _uploaded_slice.get("printer_id") != printer_identity() or _uploaded_slice["slice_id"] != preparation["id"] or req.slice_id != preparation["id"] or req.filename != _uploaded_slice["filename"]:
+        raise HTTPException(status_code=409, detail="Upload and confirm the current checked slice first.")
+    if not known_idle(_real_printer_status()):
+        raise HTTPException(status_code=409, detail="Start requires a known-idle live printer.")
     try:
+        job = get_job()
+        selected = (job.get("job") or {}).get("file") or {}
+        if selected.get("origin") != "local" or selected.get("path") != req.filename:
+            raise HTTPException(status_code=409, detail="Selected printer file changed. Upload the checked slice again.")
+        if str(job.get("state", "")).lower() not in ("operational", "ready", "idle"):
+            raise HTTPException(status_code=409, detail="Printer is no longer idle.")
+        # Consume authorization before dispatch: a timeout may still have started the job.
+        _uploaded_slice = None
         return control_job("start")
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail="Printer start unavailable.") from exc
+
+
+def confirmed_job_control(req, action):
+    if not req.confirm:
+        raise HTTPException(status_code=400, detail="confirm=true required")
+    status = _real_printer_status()
+    if status.get("simulated") or status.get("source") != "octoprint":
+        raise HTTPException(status_code=409, detail="Live printer status required.")
+    flags = status.get("flags") or {}
+    if action == "resume" and not flags.get("paused"):
+        raise HTTPException(status_code=409, detail="Printer is not paused.")
+    if action == "pause" and not flags.get("printing"):
+        raise HTTPException(status_code=409, detail="Printer is not printing.")
+    if action == "cancel" and not (flags.get("printing") or flags.get("paused")):
+        raise HTTPException(status_code=409, detail="No active print to cancel.")
+    try:
+        return control_job(action)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Printer control unavailable.") from exc
 
 
 @router.post("/printer/pause")
-def printer_pause():
-    status = _real_printer_status()
-    if status.get("simulated"):
-        raise HTTPException(status_code=400, detail="simulated printer cannot control live hardware")
-    try:
-        return control_job("pause")
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+def printer_pause(req: ControlRequest):
+    return confirmed_job_control(req, "pause")
 
 
 @router.post("/printer/resume")
-def printer_resume():
-    try:
-        return control_job("resume")
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+def printer_resume(req: ControlRequest):
+    return confirmed_job_control(req, "resume")
 
 
 TOOL_RANGE = (0, 280)
@@ -447,15 +526,7 @@ def printer_factors(req: FactorsRequest):
 
 @router.post("/printer/cancel")
 def printer_cancel(req: ControlRequest):
-    if not req.confirm:
-        raise HTTPException(status_code=400, detail="confirm=true required")
-    status = _real_printer_status()
-    if status.get("simulated"):
-        raise HTTPException(status_code=400, detail="simulated printer cannot control live hardware")
-    try:
-        return control_job("cancel")
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+    return confirmed_job_control(req, "cancel")
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -518,17 +589,10 @@ def chat(req: ChatRequest, request: Request, response: Response):
         return {"ok": r.ok, "error": r.error, "mesh": r.mesh, "sha256": r.sha256}
 
     def slice_fixed(args):
-        global _last_slice
-        stl = _last_stl.get("current")
-        if not stl or not Path(stl).exists():
-            return {"ok": False, "error": "no checked STL available; build first"}
-        r = slice_model(stl, str(ROOT / "profiles/ender3-proven-pla.ini"), overlay_path=str(ROOT / "profiles/ender3-speed-preference.ini"))
-        _last_slice = {
-            "ok": r.ok, "error": r.error, "estimates": r.estimates,
-            "gcode_path": r.gcode_path, "profile_sha256": r.profile_sha256,
-            "revision_id": _last_revision_id,
-        }
-        return {"ok": r.ok, "error": r.error, "estimates": r.estimates}
+        try:
+            return slice_now()
+        except HTTPException as exc:
+            return {"ok": False, "error": exc.detail}
 
     def printer_status(args):
         return _real_printer_status()
