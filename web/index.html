@@ -21,7 +21,7 @@
     --ink: #1c2430;
     --cream: #fff6ea;
     --paper: #fffaf3;
-    --claw: #e23d32;
+    --claw: #c83228;
     --claw-deep: #b42318;
     --denim: #2c4a78;
     --denim-deep: #1d3557;
@@ -30,7 +30,8 @@
     --sand: #f3e2c4;
     --stage: #3a4048;
     --plate: #c8c8c8;
-    --line: #1c2430;
+    --line: #d5cbbb;
+    --muted: #665d51;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
@@ -40,10 +41,7 @@
     color: var(--ink);
     font-family: Nunito, "Trebuchet MS", "Segoe UI", sans-serif;
     font-size: 15px;
-    background:
-      radial-gradient(900px 280px at 100% 0%, #ffd48a 0%, transparent 60%),
-      radial-gradient(700px 320px at 0% 100%, #8ec4ea 0%, transparent 55%),
-      var(--sand);
+    background: var(--sand);
     display: flex;
     flex-direction: column;
   }
@@ -57,10 +55,10 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 10px 16px;
+    padding: 12px 24px;
     background: var(--denim-deep);
     color: white;
-    border-bottom: 5px solid var(--claw);
+    border-bottom: 3px solid var(--claw);
   }
   .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
   .brand .mark {
@@ -85,16 +83,15 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.78fr);
-    gap: 14px;
-    padding: 14px;
+    grid-template-columns: minmax(0, 1.5fr) minmax(380px, 1fr);
+    gap: 16px;
+    padding: 20px;
   }
   .stage, .side {
     min-height: 0;
     background: var(--paper);
-    border: 3px solid var(--line);
-    border-radius: 22px;
-    box-shadow: 6px 6px 0 var(--line);
+    border: 1px solid var(--line);
+    border-radius: 16px;
     position: relative;
   }
   .stage { overflow: hidden; background: var(--stage); }
@@ -109,13 +106,13 @@
   }
   .stage-foot .grow { flex: 1; min-width: 0; }
   .stage-foot p { margin: 0; color: #f4f1ea; font-size: 12px; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,.55); }
-  .view-presets button, .slice, .chip, .ctrl button, .ghost {
-    border: 2px solid var(--line);
+  .view-presets button, .slice, .chip, .ctrls button, .ghost {
+    border: 1px solid var(--line);
     background: var(--cream);
     border-radius: 999px;
-    padding: 6px 12px;
+    padding: 8px 12px;
     font-weight: 800;
-    box-shadow: 2px 2px 0 var(--line);
+    box-shadow: none;
   }
   .view-presets button.on { background: var(--gold); }
   .slice {
@@ -134,12 +131,12 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    border: 2px solid var(--line);
+    border: 1px solid var(--line);
     background: var(--cream);
     border-radius: 999px;
     padding: 4px 12px 4px 4px;
     font-weight: 800;
-    box-shadow: 2px 2px 0 var(--line);
+    box-shadow: none;
   }
   .dash-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .state {
@@ -168,7 +165,7 @@
   .temps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .temp {
     background: white;
-    border: 2px solid var(--line);
+    border: 1px solid var(--line);
     border-radius: 14px;
     padding: 8px;
   }
@@ -179,7 +176,7 @@
   .cam-wrap { margin-top: 8px; }
   #cam {
     width: 100%; height: 180px; object-fit: cover; background: #111;
-    border-radius: 12px; border: 2px solid var(--line);
+    border-radius: 12px; border: 1px solid var(--line);
   }
   #camNote { margin: 0; font-size: 12px; font-weight: 800; color: #6d6256; }
   .ctrls { display: flex; gap: 6px; margin-top: 10px; }
@@ -194,21 +191,21 @@
   .set-row { display: flex; gap: 6px; margin-top: 4px; }
   .set-row input {
     width: 100%; min-height: 0; padding: 8px 10px;
-    border: 2px solid var(--line); border-radius: 12px; background: white;
+    border: 1px solid var(--line); border-radius: 12px; background: white;
   }
   .set-row button { flex: none; background: var(--gold); }
   .settings-note { margin: 8px 0 0; font-size: 12px; font-weight: 700; color: #5c5148; }
 
-  .side { display: flex; flex-direction: column; background: var(--cream); }
+  .side { min-width: 0; display: flex; flex-direction: column; background: var(--cream); }
   .tabs { display: flex; gap: 6px; }
   .tabs button {
-    border: 2px solid var(--line);
+    border: 1px solid var(--line);
     background: white;
     border-radius: 999px;
     padding: 6px 14px;
     font-family: Fredoka, Nunito, sans-serif;
     font-weight: 700;
-    box-shadow: 2px 2px 0 var(--line);
+    box-shadow: none;
   }
   .tabs button[aria-selected="true"] { background: var(--gold); }
   #chatPane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -217,26 +214,26 @@
   .chat-bar {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     flex-wrap: wrap;
-    padding: 10px 12px;
-    border-bottom: 3px solid var(--line);
+    padding: 16px;
+    border-bottom: 1px solid var(--line);
   }
   .chat-bar h2 {
     margin: 0; font-family: Fredoka, Nunito, sans-serif; font-size: 18px;
   }
-  .picks { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .picks { display: flex; gap: 12px; flex-wrap: wrap; width: 100%; padding-top: 4px; }
   .picks label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; }
   select {
     appearance: none;
     background: white url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1l5 5 5-5' stroke='%231c2430' stroke-width='2' fill='none'/></svg>") no-repeat right 8px center;
-    border: 2px solid var(--line);
+    border: 1px solid var(--line);
     border-radius: 999px;
     padding: 6px 28px 6px 10px;
     font-weight: 800;
   }
-  .thread { flex: 1; min-height: 0; overflow: auto; padding: 16px 14px 8px; }
-  .empty { text-align: center; padding: 12px 12px 4px; }
+  .thread { flex: 1; min-height: 100px; overflow: auto; padding: 24px 20px 12px; }
+  .empty { text-align: center; padding: 20px 0; }
   .empty .hero { width: 96px; height: 112px; margin: 0 auto 6px; }
-  .empty h3 {
+  .empty h2 {
     margin: 0;
     font-family: Fredoka, Nunito, sans-serif;
     font-size: 28px;
@@ -253,11 +250,11 @@
     padding: 10px 12px;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    line-height: 1.35;
+    line-height: 1.5;
   }
   .msg.assistant .bubble {
     background: white;
-    border: 2px solid var(--line);
+    border: 1px solid var(--line);
     border-radius: 6px 18px 18px 18px;
   }
   .msg.user .bubble {
@@ -276,30 +273,30 @@
   .composer {
     display: flex; gap: 8px; align-items: flex-end;
     padding: 10px 12px 12px;
-    border-top: 3px solid var(--line);
+    border-top: 1px solid var(--line);
   }
   textarea {
     flex: 1; resize: none; min-height: 52px; max-height: 140px;
-    border: 2px solid var(--line); border-radius: 16px;
+    border: 1px solid var(--line); border-radius: 16px;
     padding: 12px 14px; background: white;
   }
   #send {
-    background: var(--claw); color: white; border: 2px solid var(--line);
+    background: var(--claw); color: white; border: 1px solid var(--line);
     border-radius: 16px; padding: 12px 16px; font-weight: 800;
-    box-shadow: 3px 3px 0 var(--line);
+    box-shadow: none;
   }
-  .fit { border-top: 3px solid var(--line); padding: 0 12px 12px; }
+  .fit { border-top: 1px solid var(--line); padding: 0 12px 12px; }
   .fit summary { cursor: pointer; font-weight: 800; padding: 10px 0; }
   .hint { margin: 0 0 8px; font-size: 13px; font-weight: 700; }
   .fit textarea, .fit input {
-    width: 100%; margin: 0 0 8px; border: 2px solid var(--line); border-radius: 12px;
+    width: 100%; margin: 0 0 8px; border: 1px solid var(--line); border-radius: 12px;
     padding: 8px 10px; background: white;
   }
   .fit textarea { min-height: 64px; resize: vertical; }
   #fitBtn { background: var(--gold); }
   .notes { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
   .note, .rev {
-    background: white; border: 2px solid var(--line); border-radius: 12px; padding: 8px 10px;
+    background: white; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px;
     font-size: 13px; font-weight: 700;
   }
   .rev.current { background: #fff1c9; }
@@ -309,13 +306,76 @@
     color: white; font-weight: 800; padding: 24px; text-align: center;
   }
 
+  ::selection { background: var(--gold); color: var(--ink); }
+  * { scrollbar-width: thin; scrollbar-color: #b7aa96 transparent; }
+  input, textarea { caret-color: var(--claw); }
+  input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+  button, select, summary { min-height: 40px; }
+  button { transition: background-color 140ms ease-out, border-color 140ms ease-out; }
+  button:not(:disabled):hover { border-color: var(--denim); }
+  .chip:hover, .ghost:hover, .view-presets button:hover { background: var(--sand); }
+  #send:hover, .slice:hover, #startBtn:hover { background: var(--claw-deep); }
+  :focus-visible { outline: 3px solid var(--denim); outline-offset: 3px; }
+  .stage :focus-visible { outline-color: var(--gold); }
+  .tabs { gap: 4px; }
+  .tabs button { border-radius: 8px; padding: 8px 20px; background: transparent; border-color: transparent; }
+  .tabs button[aria-selected="true"] { background: var(--denim-deep); color: white; }
+  .picks select { border-radius: 8px; font-size: 12px; }
+  .stage-foot { background: #2c323a; border-radius: 10px; padding: 12px; }
+  .stage-foot p { font-weight: 700; line-height: 1.5; text-shadow: none; }
+  .stage-foot .orbit-hint { color: #c4ceda; font-weight: 560; }
+  .stage-printer { max-width: calc(100% - 24px); }
+  .empty p { line-height: 1.6; color: var(--muted); font-weight: 560; }
+  .empty h2 { text-wrap: balance; }
+  .composer { padding: 12px 16px 16px; align-items: flex-end; }
+  .composer textarea { border-radius: 12px; }
+  #send { border-radius: 12px; min-height: 52px; }
+  .fit { flex: none; padding: 0 16px 8px; }
+  .fit[open] { max-height: 45%; overflow: auto; }
+  .field-label { display: block; margin: 12px 0 6px; font-size: 13px; font-weight: 800; }
+  .hint { line-height: 1.5; color: var(--muted); }
+  #fitStatus:not(:empty) { margin-top: 12px; }
+  #printerPane { padding: 20px; }
+  .temp { padding: 12px; border-radius: 12px; }
+  .temp strong, .ring-label strong { font-variant-numeric: tabular-nums; }
+  .settings { gap: 16px 12px; margin-top: 20px; }
+  .settings-note { line-height: 1.5; }
+  .ctrls { margin-top: 20px; }
+  .ctrls button { border-radius: 10px; }
+  .wide { margin-top: 10px; }
+  .cam-wrap { margin-top: 16px; }
+  #cam { height: auto; max-height: 240px; object-fit: contain; }
+  #camNote:not([hidden]) { padding: 20px 12px; background: var(--sand); border-radius: 10px; }
+  .bubble { max-width: 88%; }
+  @media (prefers-reduced-motion: reduce) {
+    button { transition: none; }
+  }
+  @media (max-width: 1000px) and (min-width: 861px) {
+    .view-presets { top: 64px; }
+  }
   @media (max-width: 860px) {
-    .bench { grid-template-columns: 1fr; grid-template-rows: minmax(220px, 38vh) minmax(0, 1fr); padding: 8px; gap: 8px; }
+    html, body { height: auto; min-height: 100%; }
+    body { overflow: auto; }
+    header { padding: 12px 16px; }
+    .bench { flex: none; grid-template-columns: minmax(0, 1fr); grid-template-rows: 340px auto; padding: 12px; gap: 16px; }
+    .side { min-height: 580px; }
+    .composer textarea { min-height: 76px; }
+    #chatPane { min-height: 450px; }
+    .thread { max-height: 480px; }
+    .fit[open] { max-height: none; }
     .orbit-hint { display: none; }
     .empty .hero { width: 64px; height: 74px; }
-    .empty p { display: none; }
-    .brand h1 { font-size: 22px; }
-    .empty h3 { font-size: 22px; }
+    .empty h2 { font-size: 26px; }
+    .brand h1 { font-size: 24px; }
+    .view-presets { top: 64px; }
+    .stage-foot { align-items: center; }
+  }
+  @media (max-width: 380px) {
+    .settings { grid-template-columns: 1fr; }
+    .picks { gap: 8px; }
+    .picks label { flex-wrap: wrap; }
+    .stage-foot { padding: 8px; }
+    .slice { padding: 10px 12px; }
   }
 </style>
 </head>
@@ -358,7 +418,7 @@
       <div class="stage-foot">
         <div class="grow">
           <p id="viewerNote">Pocket CaliClaw on the plate, until a build replaces it.</p>
-          <p id="stageStatus"></p>
+          <p id="stageStatus" role="status"></p>
           <p class="orbit-hint">Drag to orbit · middle pan · wheel zoom · 220 × 220 × 250</p>
         </div>
         <button type="button" class="slice" id="sliceBtn">Slice</button>
@@ -370,7 +430,7 @@
     <div class="chat-bar">
       <div class="tabs" role="tablist" aria-label="Panel">
         <button type="button" role="tab" id="tabChat" aria-selected="true" aria-controls="chatPane">Chat</button>
-        <button type="button" role="tab" id="tabPrinter" aria-selected="false" aria-controls="printerPane">Printer</button>
+        <button type="button" role="tab" id="tabPrinter" tabindex="-1" aria-selected="false" aria-controls="printerPane">Printer</button>
       </div>
       <div class="picks" id="modelPicks">
         <label>Model
@@ -392,7 +452,7 @@
     <div class="thread" id="thread">
       <div class="empty" id="empty">
         <svg class="hero" viewBox="0 0 64 74"><use href="#pocket"/></svg>
-        <h3>hey, what are we printing?</h3>
+        <h2>hey, what are we printing?</h2>
         <p>One part. Ask for a change, and the rest stays. Temperatures, speed, and the job live on the Printer tab. Start and cancel ask first.</p>
         <div class="chips">
           <button type="button" class="chip" data-suggest="A bracket, 40 mm wide, two holes 30 mm apart.">40 mm bracket</button>
@@ -402,16 +462,18 @@
       </div>
     </div>
     <form class="composer" id="composer">
-      <textarea id="input" rows="1" placeholder="A bracket, 40 mm wide, holes 30 mm apart…"></textarea>
+      <textarea aria-label="Message" id="input" rows="1" placeholder="A bracket, 40 mm wide, holes 30 mm apart…"></textarea>
       <button type="submit" id="send">Send</button>
     </form>
     <details class="fit">
       <summary>Record a measurement</summary>
       <p class="hint">A fit note is memory for the next chat. It does not edit the part by itself.</p>
+      <label for="fitNote" class="field-label">Measured fit</label>
       <textarea id="fitNote" placeholder="Hole was 0.4 mm tight"></textarea>
+      <label for="fitKeep" class="field-label">Features to keep</label>
       <input id="fitKeep" placeholder="Keep: hole spacing, wall thickness" />
       <button type="button" class="ghost" id="fitBtn">Save note</button>
-      <p class="hint" id="fitStatus"></p>
+      <p class="hint" id="fitStatus" role="status"></p>
       <p class="hint" id="fitKeepList"></p>
       <div class="notes" id="fitList"></div>
       <div class="notes" id="revList"></div>
@@ -585,6 +647,8 @@ function showPane(name) {
   document.getElementById('printerPane').hidden = !printer;
   document.getElementById('tabChat').setAttribute('aria-selected', printer ? 'false' : 'true');
   document.getElementById('tabPrinter').setAttribute('aria-selected', printer ? 'true' : 'false');
+  document.getElementById('tabChat').tabIndex = printer ? -1 : 0;
+  document.getElementById('tabPrinter').tabIndex = printer ? 0 : -1;
   document.getElementById('modelPicks').hidden = printer;
   try { sessionStorage.setItem('caliclaw-pane', printer ? 'printer' : 'chat'); } catch (err) { /* private mode */ }
 }
@@ -656,17 +720,25 @@ async function pollPrinter() {
       control.title = simulated ? 'Simulated printer. This does not move the machine.' : '';
     }
     document.getElementById('simulateBtn').hidden = !simulated;
-    refreshCamera();
   } catch (err) {
     console.error(err);
   }
 }
 pollPrinter();
 setInterval(pollPrinter, 3000);
+refreshCamera();
+setInterval(refreshCamera, 5000);
 
 document.getElementById('tabChat').onclick = () => showPane('chat');
 document.getElementById('tabPrinter').onclick = () => showPane('printer');
 document.getElementById('stagePrinter').onclick = () => showPane('printer');
+document.querySelector('.tabs').addEventListener('keydown', (event) => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const printer = event.key === 'End' || (event.key !== 'Home' && event.target.id === 'tabChat');
+  showPane(printer ? 'printer' : 'chat');
+  document.getElementById(printer ? 'tabPrinter' : 'tabChat').focus();
+});
 try {
   if (sessionStorage.getItem('caliclaw-pane') === 'printer') showPane('printer');
 } catch (err) { /* keep chat */ }

@@ -186,7 +186,7 @@ def camera():
         data = camera_snapshot()
         return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(status_code=503, detail="Snapshot unavailable.") from exc
 
 
 @router.post("/simulate/start")

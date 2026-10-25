@@ -141,3 +141,25 @@ def test_live_factors_at_the_bounds(monkeypatch):
 def test_unknown_printhead_command_is_rejected():
     with pytest.raises(ValueError):
         set_printhead_factor("jog", 100)
+
+
+def test_camera_failure_hides_connection_details(monkeypatch):
+    def fail():
+        raise RuntimeError("http://private-host/?apikey=secret")
+
+    monkeypatch.setattr(poc_api, "camera_snapshot", fail)
+    with pytest.raises(HTTPException) as exc:
+        poc_api.camera()
+    assert exc.value.status_code == 503
+    assert exc.value.detail == "Snapshot unavailable."
+
+
+def test_camera_is_independent_of_printer_status(monkeypatch):
+    def status():
+        raise AssertionError("camera must not request printer status")
+
+    monkeypatch.setattr(poc_api, "_real_printer_status", status)
+    monkeypatch.setattr(poc_api, "camera_snapshot", lambda: b"jpeg fixture")
+    response = poc_api.camera()
+    assert response.media_type == "image/jpeg"
+    assert response.body == b"jpeg fixture"
