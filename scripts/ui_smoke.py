@@ -33,6 +33,8 @@ def main():
                     req.fulfill(json={'simulated': True, 'state': 'Idle', 'source': 'simulated', 'temperature': 24, 'bed_temperature': 22})
             elif path == '/api/project':
                 req.fulfill(json={'name': 'Workshop', 'fit': state['notes'], 'keep': ['hole spacing'] if state['notes'] else []})
+            elif path == '/api/stl/import':
+                req.fulfill(json={'revision_id': 'import-test', 'stl_url': '/fixtures/cube.stl'})
             elif path == '/api/revisions':
                 req.fulfill(json=[{'id': 'revision-test-1'}] if state['chats'] else [])
             elif path == '/api/fit':
@@ -55,6 +57,9 @@ def main():
         page.route('http://workbench.test/**', route)
         page.goto('http://workbench.test/')
         expect(page.locator('#pSource')).to_have_text('Simulated')
+        page.wait_for_function('typeof window.loadSTL === "function"')
+        page.locator('#stlFile').set_input_files(str(ROOT / 'web/fixtures/cube.stl'))
+        expect(page.locator('#stageStatus')).to_contain_text('mm on the plate')
         page.locator('#tabChat').focus()
         page.keyboard.press('ArrowRight')
         expect(page.locator('#printerPane')).to_be_visible()

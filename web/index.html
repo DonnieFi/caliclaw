@@ -104,6 +104,7 @@
     left: 10px; right: 10px; bottom: 10px;
     display: flex; align-items: flex-end; gap: 10px;
   }
+  .stage-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
   .stage-foot .grow { flex: 1; min-width: 0; }
   .stage-foot p { margin: 0; color: #f4f1ea; font-size: 12px; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,.55); }
   .view-presets button, .slice, .chip, .ctrls button, .ghost {
@@ -421,7 +422,9 @@
           <p id="stageStatus" role="status"></p>
           <p class="orbit-hint">Drag to orbit · middle pan · wheel zoom · 220 × 220 × 250</p>
         </div>
-        <button type="button" class="slice" id="sliceBtn">Slice</button>
+        <div class="stage-actions"><button type="button" class="ghost" id="importBtn">Import STL</button>
+        <input type="file" id="stlFile" accept=".stl" hidden />
+        <button type="button" class="slice" id="sliceBtn">Slice</button></div>
       </div>
     </div>
   </section>
@@ -854,6 +857,32 @@ document.getElementById('uploadBtn').onclick = () => {
   picker.click();
 };
 
+document.getElementById('importBtn').onclick = () => document.getElementById('stlFile').click();
+document.getElementById('stlFile').onchange = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const button = document.getElementById('importBtn');
+  const status = document.getElementById('stageStatus');
+  button.disabled = true;
+  status.textContent = 'Checking STL…';
+  try {
+    const body = new FormData();
+    body.append('file', file);
+    const res = await fetch('/api/stl/import', { method: 'POST', body });
+    const data = await res.json();
+    if (!res.ok) throw new Error(safeDetail(data, 'STL import failed.'));
+    status.textContent = 'Imported. The original STL is saved in revisions.';
+    if (window.loadSTL) await window.loadSTL(data.stl_url, true);
+    await loadRevisions();
+    await loadProject();
+  } catch (err) {
+    status.textContent = err.message || 'STL import failed. The plate is unchanged.';
+  } finally {
+    button.disabled = false;
+    event.target.value = '';
+  }
+};
+
 document.getElementById('sliceBtn').onclick = async () => {
   const button = document.getElementById('sliceBtn');
   const status = document.getElementById('stageStatus');
@@ -913,6 +942,12 @@ async function loadRevisions() {
       const hash = rev.source_hash ? String(rev.source_hash).slice(0, 8) : '';
       meta.textContent = [when, hash].filter(Boolean).join(' · ');
       el.appendChild(meta);
+      if (rev.artifact_id) {
+        const download = document.createElement('a');
+        download.href = '/api/revisions/' + encodeURIComponent(rev.id) + '/stl';
+        download.textContent = 'Download STL';
+        el.appendChild(download);
+      }
       list.appendChild(el);
     });
   } catch (err) {

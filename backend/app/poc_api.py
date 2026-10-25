@@ -14,6 +14,9 @@ from pydantic import BaseModel
 from .collector import SimulatedPrinterState
 from .printer_logs import get_log_events
 from .db import init_db
+from .geometry import validate_stl
+from .parts import save_part
+from .repository import get_revision, get_artifact
 from .fit import fit_memory_text, project_snapshot, record_fit
 from .octoprint import (
     camera_snapshot,
@@ -196,6 +199,51 @@ def start_sim():
     for _ in range(5):
         printer.advance(0.2)
     return printer.to_dict()
+
+
+MAX_STL_BYTES = 20 * 1024 * 1024
+
+
+@router.post("/stl/import")
+async def import_stl(file: UploadFile = File(...)):
+    global _last_revision_id, _last_slice
+    if PROJECT is None:
+        raise HTTPException(status_code=404, detail="No project available.")
+    if Path(file.filename or "").suffix.lower() != ".stl":
+        raise HTTPException(status_code=400, detail="Choose an STL file.")
+    with tempfile.TemporaryDirectory(prefix="caliclaw-import-") as folder:
+        path = Path(folder) / "import.stl"
+        size = 0
+        with path.open("wb") as target:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_STL_BYTES:
+                    raise HTTPException(status_code=413, detail="STL must be at most 20 MiB.")
+                target.write(chunk)
+        try:
+            report = validate_stl(path)
+            if not report.ok:
+                raise ValueError("invalid mesh")
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="STL must contain one watertight solid with positive volume.") from exc
+        validation = report.to_dict()
+        validation.pop("path", None)
+        rev, art = save_part(DB_PATH, PROJECT.id, _last_revision_id, path,
+                             params={"source": "import"}, validation=validation)
+    _last_revision_id = rev.id
+    _last_stl.clear()
+    _last_stl["current"] = art.path
+    _last_slice = None
+    return {"revision_id": rev.id, "stl_url": f"/api/revisions/{rev.id}/stl", "mesh": validation}
+
+
+@router.get("/revisions/{revision_id}/stl")
+def revision_stl(revision_id: str):
+    rev = get_revision(DB_PATH, revision_id)
+    art = get_artifact(DB_PATH, rev.artifact_id) if rev and rev.artifact_id else None
+    if not rev or PROJECT is None or rev.project_id != PROJECT.id or not art or not art.path or not Path(art.path).is_file():
+        raise HTTPException(status_code=404, detail="STL unavailable.")
+    return FileResponse(art.path, media_type="model/stl", filename=f"{rev.id}.stl")
 
 
 @router.get("/stl/current")
