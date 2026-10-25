@@ -126,3 +126,38 @@ def test_pause_resume_cancel_without_model(prepared, monkeypatch):
         monkeypatch.setattr(poc_api, '_real_printer_status', lambda: {'source': 'octoprint', 'flags': flags})
         getattr(poc_api, 'printer_' + action)(poc_api.ControlRequest(confirm=True))
     assert prepared[3] == ['pause', 'resume', 'cancel']
+
+
+def test_explicit_overlay_is_sliced_and_changes_invalidate(tmp_path,monkeypatch):
+    profile=tmp_path/'base.ini';profile.write_bytes(Path('profiles/ender3-proven-pla.ini').read_bytes())
+    overlay=tmp_path/'speed.ini';overlay.write_bytes(Path('profiles/ender3-speed-preference.ini').read_bytes())
+    monkeypatch.setenv('CALICLAW_PROFILE_PATH',str(profile))
+    monkeypatch.setenv('CALICLAW_PROFILE_SHA256',digest(profile))
+    monkeypatch.setenv('CALICLAW_OVERLAY_PATH',str(overlay))
+    monkeypatch.setenv('CALICLAW_OVERLAY_SHA256',digest(overlay))
+    monkeypatch.setattr(poc_api,'_last_stl',{'current':str(Path('web/fixtures/cube.stl').resolve())})
+    monkeypatch.setattr(poc_api,'_last_revision_id','cube')
+    monkeypatch.setattr(poc_api,'_last_slice',None)
+    monkeypatch.setattr(poc_api,'_uploaded_slice',None)
+    result=poc_api.slice_now()
+    assert result['ready'] and 'overlay' in result['profile']
+    assert poc_api._last_slice['overlay_sha256']==digest(overlay)
+    gcode=Path(poc_api._last_slice['gcode_path']).read_text()
+    assert 'M220 S150' in gcode
+    overlay.write_text('changed')
+    with pytest.raises(HTTPException):
+        poc_api.checked_preparation()
+
+
+def test_switch_during_slice_does_not_publish_for_new_printer(prepared,monkeypatch):
+    original=poc_api.slice_model
+    def changing_slice(*args,**kwargs):
+        # This must be possible while the slicer runs; pause/cancel use this lock too.
+        assert poc_api._control_lock.acquire(blocking=False)
+        poc_api._control_lock.release()
+        monkeypatch.setenv('OCTOPRINT_BASE_URL','http://changed-during-slice.invalid')
+        return original(*args,**kwargs)
+    monkeypatch.setattr(poc_api,'slice_model',changing_slice)
+    with pytest.raises(HTTPException) as exc:
+        poc_api.slice_now()
+    assert exc.value.status_code==409 and poc_api._last_slice is None

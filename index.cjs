@@ -59,7 +59,7 @@ module.exports = {
         name: "caliclaw",
         label: "CaliClaw",
         description:
-          "Workshop memory for one printed part. Actions: status, project, revisions, fit, slice. " +
+          "Workshop memory for one printed part. Actions: printers, status, project, revisions, fit, slice. " +
           "fit records a measurement and the features that must stay. " +
           "This tool does not start, pause, or cancel a printer.",
         parameters: {
@@ -68,8 +68,8 @@ module.exports = {
           properties: {
             action: {
               type: "string",
-              enum: ["status", "project", "revisions", "fit", "slice"],
-              description: "status reads the printer. project and revisions read the part. fit records a measurement. slice prepares G-code.",
+              enum: ["printers", "status", "project", "revisions", "fit", "slice"],
+              description: "printers lists saved connections and their capabilities. Setup and selection stay on the workbench. status reads the selected printer. project and revisions read the part. fit records a measurement. slice prepares G-code.",
             },
             note: { type: "string", description: "What the printed part did, for action=fit." },
             measured: {
@@ -93,6 +93,7 @@ module.exports = {
             });
           }
           try {
+            if (action === "printers") return textResult(await callWorkbench(base, "GET", "/api/printers"));
             if (action === "status") return textResult(await callWorkbench(base, "GET", "/api/printer"));
             if (action === "project") return textResult(await callWorkbench(base, "GET", "/api/project"));
             if (action === "revisions") return textResult(await callWorkbench(base, "GET", "/api/revisions"));

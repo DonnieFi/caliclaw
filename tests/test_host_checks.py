@@ -2,6 +2,14 @@ from types import SimpleNamespace
 import pytest
 from backend.app import host_checks, poc_api
 from fastapi import HTTPException
+from backend.app.printer_config import PrinterConfig
+
+@pytest.fixture(autouse=True)
+def host_config(monkeypatch):
+    config=PrinterConfig(name="Test",base_url="http://test.invalid",ssh_alias="test-camera-host",camera_service="webcamd",camera_restart="service")
+    monkeypatch.setattr(host_checks,"active_printer",lambda:config)
+    return config
+
 
 IDLE = {'source': 'octoprint', 'state': 'Operational', 'flags': {'operational': True}, 'simulated': False}
 
@@ -14,7 +22,7 @@ def test_unknown_check_cannot_execute(monkeypatch):
 
 def test_fixed_command_and_redacted_output(monkeypatch):
     def run(args, **kwargs):
-        assert args[-1] == host_checks.READ_COMMANDS['camera_logs']
+        assert args[-1] == 'journalctl -u webcamd -n 30 --no-pager -o cat | head -c 16384'
         return SimpleNamespace(returncode=0, stdout='octopi 192.168.1.4 https://private.local api_key=hidden {"token": "secret-value"}')
     monkeypatch.setattr(host_checks.subprocess, 'run', run)
     result = host_checks.run_check('camera_logs')
@@ -41,7 +49,7 @@ def test_confirmed_recovery_targets_only_camera(monkeypatch):
     monkeypatch.setattr(host_checks.subprocess, 'run', lambda args, **kwargs: calls.append(args) or SimpleNamespace(returncode=0))
     result = host_checks.restart_camera(lambda: IDLE)
     assert result == {'restarted': True, 'snapshot_available': True}
-    assert calls == [host_checks.SSH + ['sudo -n systemctl restart webcamd.service']]
+    assert calls == [['ssh','-o','BatchMode=yes','-o','ConnectTimeout=5','test-camera-host','sudo -n /usr/sbin/service webcamd restart']]
 
 
 def test_healthy_camera_is_not_restarted(monkeypatch):

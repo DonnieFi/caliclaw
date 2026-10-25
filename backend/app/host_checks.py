@@ -3,21 +3,37 @@ import json
 import os
 import re
 import subprocess
+import shlex
+from urllib.parse import urlsplit
+from .printer_config import active_printer
 
 from .collector import redact_text
 from .octoprint import camera_snapshot, get_job
 
-HOST = 'octopi'
-SSH = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', HOST]
-READ_COMMANDS = {
-    'camera_service': 'systemctl show webcamd.service --property=ActiveState,SubState --no-pager',
-    'camera_logs': 'journalctl -u webcamd.service -n 30 --no-pager -o cat | head -c 16384',
-    'klipper_log': 'for p in /tmp/klippy.log /home/pi/printer_data/logs/klippy.log; do if test -r "$p"; then tail -n 50 "$p" | head -c 16384; exit; fi; done; exit 1',
-}
-CHECK_NAMES = ('job_state', 'snapshot', *READ_COMMANDS)
+CHECK_NAMES = ('job_state', 'snapshot', 'camera_service', 'camera_logs', 'klipper_log')
+
+
+def host_command(name, config):
+    if not config or not config.ssh_alias:
+        raise ValueError('SSH host checks are not configured for this printer.')
+    service = shlex.quote(config.camera_service)
+    if name == 'camera_service' and config.camera_service:
+        command = f'systemctl show {service} --property=ActiveState,SubState --no-pager'
+    elif name == 'camera_logs' and config.camera_service:
+        command = f'journalctl -u {service} -n 30 --no-pager -o cat | head -c 16384'
+    elif name == 'klipper_log' and config.klipper_log:
+        command = f'tail -n 50 -- {shlex.quote(config.klipper_log)} | head -c 16384'
+    else:
+        raise ValueError('Host check is not configured.')
+    return ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', config.ssh_alias, command]
 
 
 def safe_output(text):
+    config = active_printer()
+    if config:
+        for value in [config.api_key, urlsplit(config.base_url).hostname, config.ssh_alias]:
+            if value:
+                text = text.replace(value, '<redacted>')
     # Redact actual configured credentials before general patterns.
     for name, value in os.environ.items():
         if value and len(value) >= 4 and any(s in name.lower() for s in ('key', 'token', 'password', 'secret')):
@@ -44,7 +60,7 @@ def run_check(name):
             code = 0 if data.startswith(b'\xff\xd8\xff') else 1
             text = 'JPEG snapshot available.' if code == 0 else 'Snapshot unavailable.'
         else:
-            result = subprocess.run(SSH + [READ_COMMANDS[name]], capture_output=True, text=True, timeout=12)
+            result = subprocess.run(host_command(name, active_printer()), capture_output=True, text=True, timeout=12)
             code = result.returncode
             text = result.stdout if code == 0 else 'Check unavailable.'
         return {'name': name, 'exit': code, 'output': safe_output(text), 'available': code == 0}
@@ -70,8 +86,15 @@ def restart_camera(status_reader):
         return {'restarted': False, 'snapshot_available': True}
     if not known_idle(status_reader()):
         raise ValueError('Printer state changed. Camera recovery refused.')
+    config = active_printer()
+    if not config or not config.ssh_alias or not config.camera_service or config.camera_restart == 'disabled':
+        raise ValueError('Camera recovery is not configured for this printer.')
+    service = shlex.quote(config.camera_service.removesuffix('.service'))
+    command = (f'sudo -n /usr/sbin/service {service} restart' if config.camera_restart == 'service'
+               else f'sudo -n systemctl restart {service}.service')
+    args = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', config.ssh_alias, command]
     try:
-        result = subprocess.run(SSH + ['sudo -n systemctl restart webcamd.service'], capture_output=True, timeout=15)
+        result = subprocess.run(args, capture_output=True, timeout=15)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise ValueError('Camera service restart unavailable.') from exc
     if result.returncode != 0:

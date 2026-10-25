@@ -16,6 +16,8 @@ from .collector import SimulatedPrinterState
 from .printer_logs import get_log_events
 from .db import init_db
 from .geometry import validate_stl
+from .printer_config import PrinterConfig, active_printer, list_printers, save_printer, select_printer, public_printer
+from .printer_discovery import discover_printers, probe_printer, inspect_profile
 from .host_checks import CHECK_NAMES, run_check, restart_camera, known_idle
 from .print_preparation import selected_profile, profile_snapshot, digest, validate_preparation, printer_identity
 from .parts import save_part
@@ -187,9 +189,89 @@ def post_fit(req: FitRequest):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/printers")
+def printers_view():
+    return list_printers()
+
+
+@router.post("/printers/discover")
+def printers_discover():
+    return discover_printers()
+
+
+@router.post("/printers/probe")
+def printers_probe(config: PrinterConfig):
+    if config.id and not config.api_key:
+        from .printer_config import get_printer_config
+        saved = get_printer_config(config.id)
+        if saved and saved.base_url == config.base_url:
+            config = config.model_copy(update={'api_key': saved.api_key})
+    return probe_printer(config)
+
+
+@router.get("/printers/{printer_id}/setup")
+def printer_setup_view(printer_id: str):
+    from .printer_config import get_printer_config
+    config = get_printer_config(printer_id)
+    if config is None:
+        raise HTTPException(status_code=404, detail="Unknown saved printer.")
+    return config.model_dump(exclude={"api_key"})
+
+
+class ProfileInspectRequest(BaseModel):
+    path: str
+
+
+@router.post("/printers/profile/inspect")
+def profile_inspect(req: ProfileInspectRequest):
+    try:
+        return inspect_profile(req.path)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Profile is unavailable or is not a supported INI file.") from exc
+
+
+@router.post("/printers")
+def printers_save(config: PrinterConfig):
+    global _last_slice, _uploaded_slice
+    with _control_lock:
+        try:
+            result = save_printer(config)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Could not update that printer.") from exc
+        _last_slice = None
+        _uploaded_slice = None
+        return result
+
+
+class PrinterSelectRequest(BaseModel):
+    printer_id: str
+
+
+@router.post("/printers/select")
+def printers_select(req: PrinterSelectRequest):
+    global _last_slice, _uploaded_slice
+    with _control_lock:
+        try:
+            result = select_printer(req.printer_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Unknown saved printer.") from exc
+        _last_slice = None
+        _uploaded_slice = None
+        return result
+
+
 @router.get("/printer")
 def get_printer_status():
-    return _real_printer_status()
+    with _control_lock:
+        return _selected_printer_status()
+
+
+def _selected_printer_status():
+    status = _real_printer_status()
+    config = active_printer()
+    status['printer'] = public_printer(config) if config else None
+    status['printer_id'] = printer_identity()
+    return status
 
 
 @router.get("/camera")
@@ -317,31 +399,47 @@ def slice_current():
 @router.post("/slice")
 def slice_now():
     global _last_slice, _uploaded_slice
-    stl = _last_stl.get("current")
-    if not stl or not Path(stl).exists():
-        raise HTTPException(status_code=400, detail="No checked STL available; build or import first.")
-    _uploaded_slice = None
-    _last_slice = None
+    snapshot = None
+    overlay_snapshot = None
     try:
-        profile = selected_profile()
-        snapshot = profile_snapshot(profile)
-        mesh_hash = digest(stl)
-        r = slice_model(stl, str(snapshot))
+        # Capture settings quickly; slicing must not block live pause/cancel controls.
+        with _control_lock:
+            stl = _last_stl.get("current")
+            revision_id = _last_revision_id
+            if not stl or not Path(stl).exists():
+                raise HTTPException(status_code=400, detail="No checked STL available; build or import first.")
+            _uploaded_slice = None
+            _last_slice = None
+            profile = selected_profile()
+            snapshot = profile_snapshot(profile)
+            mesh_hash = digest(stl)
+            overlay_snapshot = snapshot.parent / 'overlay.ini' if profile['overlay_bytes'] is not None else None
+            if overlay_snapshot:
+                overlay_snapshot.write_bytes(profile['overlay_bytes'])
+            sliced_printer_id = printer_identity()
+        r = slice_model(stl, str(snapshot), **({'overlay_path': str(overlay_snapshot)} if overlay_snapshot else {}))
     except (OSError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="Slicer or profile unavailable.") from exc
     finally:
-        if 'snapshot' in locals():
+        if overlay_snapshot:
+            overlay_snapshot.unlink(missing_ok=True)
+        if snapshot:
             snapshot.unlink(missing_ok=True)
             snapshot.parent.rmdir()
     if not r.ok or not r.gcode_path:
         raise HTTPException(status_code=400, detail="Slice failed. Check the part and profile.")
-    _last_slice = {
-        "id": uuid.uuid4().hex, "ok": True, "error": None,
-        "estimates": r.estimates, "gcode_path": r.gcode_path,
-        "profile_sha256": profile["sha256"], "profile_confirmed": profile["confirmed"],
-        "mesh_sha256": mesh_hash, "gcode_sha256": digest(r.gcode_path), "revision_id": _last_revision_id,
-    }
-    return {"ok": True, **preparation_view()}
+    with _control_lock:
+        if (printer_identity() != sliced_printer_id or revision_id != _last_revision_id
+                or _last_stl.get("current") != stl or digest(stl) != mesh_hash):
+            raise HTTPException(status_code=409, detail="Printer or part changed during slicing. Slice again.")
+        _last_slice = {
+            "id": uuid.uuid4().hex, "ok": True, "error": None,
+            "estimates": r.estimates, "gcode_path": r.gcode_path,
+            "profile_sha256": profile["sha256"], "overlay_sha256": profile["overlay_sha256"],
+            "printer_id": sliced_printer_id, "profile_confirmed": profile["confirmed"],
+            "mesh_sha256": mesh_hash, "gcode_sha256": digest(r.gcode_path), "revision_id": revision_id,
+        }
+        return {"ok": True, **preparation_view()}
 
 
 @router.get("/host/checks/{name}")
@@ -353,12 +451,25 @@ def host_check(name: str):
 
 
 # OctoPrint explicit controls (require confirm=true for risky actions)
+def _require_printer_selection(identity):
+    config = active_printer()
+    if config and config.id != "environment" and identity != printer_identity():
+        raise HTTPException(status_code=409, detail="Selected printer changed. Refresh status and confirm again.")
+
+
 class ControlRequest(BaseModel):
     confirm: bool = False
+    printer_id: str = ""
 
 
 @router.post("/camera/restart")
 def camera_restart(req: ControlRequest):
+    with _control_lock:
+        _require_printer_selection(req.printer_id)
+        return _camera_restart(req)
+
+
+def _camera_restart(req):
     if not req.confirm:
         raise HTTPException(status_code=400, detail="Confirm camera service restart first.")
     try:
@@ -377,7 +488,13 @@ def checked_preparation():
 
 
 @router.post("/printer/upload")
-def printer_upload():
+def printer_upload(req: ControlRequest | None = None):
+    with _control_lock:
+        _require_printer_selection(req.printer_id if req else "")
+        return _upload_checked_slice()
+
+
+def _upload_checked_slice():
     global _uploaded_slice
     preparation = checked_preparation()
     if not known_idle(_real_printer_status()):
@@ -408,6 +525,7 @@ def printer_start(req: StartRequest):
 
 def _start_checked_print(req):
     global _uploaded_slice
+    _require_printer_selection(req.printer_id)
     if not req.confirm:
         raise HTTPException(status_code=400, detail="confirm=true required")
     preparation = checked_preparation()
@@ -432,6 +550,12 @@ def _start_checked_print(req):
 
 
 def confirmed_job_control(req, action):
+    with _control_lock:
+        _require_printer_selection(req.printer_id)
+        return _confirmed_job_control(req, action)
+
+
+def _confirmed_job_control(req, action):
     if not req.confirm:
         raise HTTPException(status_code=400, detail="confirm=true required")
     status = _real_printer_status()
@@ -466,11 +590,13 @@ FACTOR_RANGE = (10, 200)
 
 
 class TargetsRequest(BaseModel):
+    printer_id: str = ""
     tool: float | None = None
     bed: float | None = None
 
 
 class FactorsRequest(BaseModel):
+    printer_id: str = ""
     feedrate: int | None = None
     flowrate: int | None = None
 
@@ -488,6 +614,12 @@ def _refuse_simulated() -> None:
 
 @router.post("/printer/targets")
 def printer_targets(req: TargetsRequest):
+    with _control_lock:
+        _require_printer_selection(req.printer_id)
+        return _printer_targets(req)
+
+
+def _printer_targets(req):
     if req.tool is None and req.bed is None:
         raise HTTPException(status_code=400, detail="set a nozzle or bed target")
     if req.tool is not None:
@@ -507,6 +639,12 @@ def printer_targets(req: TargetsRequest):
 
 @router.post("/printer/factors")
 def printer_factors(req: FactorsRequest):
+    with _control_lock:
+        _require_printer_selection(req.printer_id)
+        return _printer_factors(req)
+
+
+def _printer_factors(req):
     if req.feedrate is None and req.flowrate is None:
         raise HTTPException(status_code=400, detail="set a speed or flow")
     if req.feedrate is not None:

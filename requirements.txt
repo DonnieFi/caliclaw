@@ -6,3 +6,5 @@ python-dotenv
 pytest
 trimesh
 numpy
+python-multipart
+zeroconf>=0.131

@@ -7,6 +7,8 @@ from typing import Any, Optional
 
 import httpx
 
+from .printer_config import active_printer
+
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -15,14 +17,16 @@ except Exception:
 
 
 def base_url() -> str:
-    url = os.environ.get("OCTOPRINT_BASE_URL", "").strip().rstrip("/")
+    printer = active_printer()
+    url = printer.base_url if printer else ""
     if not url:
         raise RuntimeError("OCTOPRINT_BASE_URL not configured")
     return url
 
 
 def api_key() -> str:
-    key = os.environ.get("OCTOPRINT_API_KEY", "")
+    printer = active_printer()
+    key = printer.api_key if printer else ""
     if not key:
         raise RuntimeError("OCTOPRINT_API_KEY not configured")
     return key
@@ -51,7 +55,11 @@ def get_job() -> dict[str, Any]:
 
 
 def camera_snapshot() -> bytes:
-    r = httpx.get(base_url() + "/webcam/?action=snapshot", headers=_headers(), timeout=10)
+    printer = active_printer()
+    if not printer or not printer.snapshot_url:
+        raise RuntimeError("Snapshot address not configured")
+    # Snapshot servers can be on a different port/host. Never forward the API key.
+    r = httpx.get(printer.snapshot_url, timeout=10)
     r.raise_for_status()
     return r.content
 

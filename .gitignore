@@ -31,3 +31,6 @@ node_modules/
 .dolt/
 .beads-credential-key
 .beads/proxieddb/
+
+# Private saved printer credentials and host/profile settings.
+printers.local.json

@@ -19,6 +19,14 @@ Units are millimeters unless the user names another unit. Ask for a missing fit 
 4. Orient for a stable flat base and the least support that still prints. Name strength and finish trade-offs. Slice only after the user accepts the orientation.
 5. Slice with `POST /api/slice`. A slice belongs to one mesh hash and one profile hash. Either change invalidates it. Read estimates from the response. Do not treat a slicer time as a measured print.
 
+## Printer setup
+
+Use `caliclaw` action `printers` to list saved connections and capability summaries, then read `status` for the selected printer. Setup and selection happen in the workbench's Printer setup section. Users can discover advertised OctoPrint instances or configure an endpoint manually. Discovery and a successful connection test do not approve a physical printer or its slicer settings.
+
+OctoPrint is the connection transport; firmware can be Klipper, Marlin, other or unknown. Do not infer firmware from transport, infer nozzle size from an old profile, or apply this workshop's calibration to another printer. Profile and optional overlay must both be reviewed for the selected printer. Changes to either file or the selected printer invalidate preparation. Credentials, host addresses and local paths stay out of the tool summaries and model context.
+
+For preparation and recovery, read [Printer workflows](printer-workflows.md). The reference gives safeguards, not permission to operate hardware.
+
 ## Printer
 
 - `GET /api/printer` is status. Prefer it over SSH while a job may be running.

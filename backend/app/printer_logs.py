@@ -8,13 +8,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .collector import redact_text
+from .printer_config import active_printer, config_path
 
 MAX_LOG_BYTES = 64 * 1024
 
 
 def get_log_events() -> dict:
     """Read a local collected log; never accept paths from model arguments."""
-    configured = os.environ.get("CALICLAW_PRINTER_LOG", "").strip()
+    printer = active_printer()
+    if config_path().exists():
+        configured = printer.local_log if printer else ""
+    else:
+        configured = os.environ.get("CALICLAW_PRINTER_LOG", "")
+    configured = configured.strip()
     unavailable = {"available": False, "events": [], "reason": "Printer log unavailable."}
     if not configured:
         return unavailable

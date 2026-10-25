@@ -4,6 +4,7 @@ Run: python scripts/ui_smoke.py [screenshot-directory]
 All API calls are fixtures; no model or printer is contacted.
 """
 import base64
+import os
 import sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
@@ -12,14 +13,33 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main():
     with sync_playwright() as p:
-        browser = p.chromium.launch(args=['--no-sandbox'])
+        browser = p.chromium.launch(args=['--no-sandbox'], executable_path=os.environ.get('CALICLAW_QA_CHROME'))
         page = browser.new_page(viewport={'width': 1440, 'height': 1000}, reduced_motion='reduce')
-        state = {'notes': [], 'chats': 0, 'camera_fail': False, 'printer_fail': False, 'camera_calls': 0}
+        state = {'notes': [], 'chats': 0, 'camera_fail': False, 'printer_fail': False, 'camera_calls': 0, 'printers': [], 'active': None}
         errors = []
         page.on('pageerror', lambda err: errors.append(str(err)))
         def route(req):
             path = req.request.url.split('workbench.test', 1)[-1].split('?')[0]
-            if path == '/api/camera':
+            if path == '/api/printers/discover':
+                req.fulfill(json={'candidates':[{'name':'Discovered printer','base_url':'http://discovered.local:5000'}], 'message':'One candidate found. Review before selecting.'})
+            elif path == '/api/printers/probe':
+                req.fulfill(json={'reachable':True,'message':'OctoPrint responded. Review settings before saving.','suggested':{'volume':[230,220,200],'nozzle':0.6,'snapshot_url':'http://camera.local/snapshot.jpg'}})
+            elif path == '/api/printers/profile/inspect':
+                req.fulfill(json={'sha256':'a'*64,'settings':{'nozzle_diameter':'0.6'}})
+            elif path == '/api/printers/select':
+                state['active']=req.request.post_data_json['printer_id']
+                req.fulfill(json={'active_id':state['active'],'printers':state['printers']})
+            elif path == '/api/printers':
+                if req.request.method=='POST':
+                    data=req.request.post_data_json
+                    assert data['api_key']=='fixture-secret'
+                    assert data['profile_sha256']=='a'*64
+                    saved={'id':'test-printer','name':data['name'],'volume':data.get('volume'),'has_key':True,'has_camera_recovery':False}
+                    state['printers'].append(saved)
+                    req.fulfill(json=saved)
+                else:
+                    req.fulfill(json={'active_id':state['active'],'printers':state['printers']})
+            elif path == '/api/camera':
                 state['camera_calls'] += 1
                 if state['camera_fail']:
                     req.fulfill(status=503, json={'detail': 'http://private-host secret-key'})
@@ -30,7 +50,7 @@ def main():
                 if state['printer_fail']:
                     req.abort()
                 else:
-                    req.fulfill(json={'simulated': True, 'state': 'Idle', 'source': 'simulated', 'temperature': 24, 'bed_temperature': 22})
+                    req.fulfill(json={'simulated': True, 'state': 'Idle', 'source': 'simulated', 'temperature': 24, 'bed_temperature': 22,'printer_id':'fixture-id','printer':next((p for p in state['printers'] if p['id']==state['active']),None)})
             elif path.startswith('/api/host/checks/'):
                 req.fulfill(json={'name': path.rsplit('/', 1)[-1], 'exit': None, 'output': 'Check unavailable.', 'available': False})
             elif path == '/api/project':
@@ -67,7 +87,30 @@ def main():
         page.locator('#tabChat').focus()
         page.keyboard.press('ArrowRight')
         expect(page.locator('#printerPane')).to_be_visible()
-        expect(page.locator('#tabPrinter')).to_be_focused()
+        page.locator('#discoverPrinters').click()
+        expect(page.locator('#discoveredPrinters button')).to_have_count(1)
+        assert state['active'] is None
+        page.locator('#discoveredPrinters button').click()
+        expect(page.locator('#configUrl')).to_have_value('http://discovered.local:5000')
+        page.locator('#newPrinter').click()
+        page.locator('#configName').fill('Manual printer')
+        page.locator('#configUrl').fill('http://manual.local:5000')
+        page.locator('#configKey').fill('fixture-secret')
+        page.locator('#testPrinter').click()
+        expect(page.locator('#useReported')).to_be_visible()
+        page.locator('#useReported').click()
+        expect(page.locator('#configWidth')).to_have_value('230')
+        page.locator('#printerConfigForm details summary').first.click()
+        page.locator('#configProfile').fill('/tmp/fixture.ini')
+        page.locator('[data-inspect="profile"]').click()
+        expect(page.locator('#profileInspection')).to_contain_text('SHA-256')
+        page.locator('#profileReviewed').check()
+        page.locator('#savePrinter').click()
+        expect(page.locator('#setupStatus')).to_contain_text('Saved and selected')
+        expect(page.locator('#configKey')).to_have_value('')
+        assert state['active']=='test-printer'
+        expect(page.locator('#volumeNote')).to_contain_text('230 × 220 × 200')
+        page.locator('#printerSetup > summary').click()
         expect(page.locator('#cam')).to_be_visible()
         page.wait_for_function('document.querySelector("#cam").naturalWidth > 0')
         for control in ['startBtn', 'pauseBtn', 'cancelBtn']:
@@ -116,6 +159,8 @@ def main():
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), width
             for name in ['chat', 'printer']:
                 page.evaluate('(name) => showPane(name)', name)
+                if name == 'printer':
+                    page.locator('#printerSetup').evaluate('(node) => node.open=true')
                 if shots:
                     page.screenshot(path=str(shots / f'{name}-{width}.png'), full_page=True)
         # Capture arrival separately from populated regression state.

@@ -345,6 +345,16 @@
   .ctrls button { border-radius: 10px; }
   .wide { margin-top: 10px; }
   .cam-wrap { margin-top: 16px; }
+  .printer-setup { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 20px; }
+  .printer-setup summary { cursor: pointer; font-weight: 800; padding: 10px 0; }
+  .printer-setup input:not([type="checkbox"]), .printer-setup select { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 8px; background-color: white; padding: 10px; }
+  .printer-setup details { margin-top: 16px; }
+  .setup-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .setup-dimensions { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; margin-top: 16px; font-size: 12px; font-weight: 800; }
+  .printer-setup output { display: block; font-size: 12px; overflow-wrap: anywhere; margin-top: 8px; }
+  .review-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; margin-top: 16px; }
+  #testPrinter { margin-top: 12px; }
+  #setupStatus { margin-top: 12px; }
   .host-checks { margin-top: 20px; }
   .host-checks summary { cursor: pointer; font-weight: 800; }
   #hostTranscript { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--denim-deep); color: var(--cream); padding: 16px; border-radius: 10px; max-height: 280px; overflow: auto; font-size: 12px; }
@@ -423,7 +433,7 @@
         <div class="grow">
           <p id="viewerNote">Pocket CaliClaw on the plate, until a build replaces it.</p>
           <p id="stageStatus" role="status"></p>
-          <p class="orbit-hint">Drag to orbit · middle pan · wheel zoom · 220 × 220 × 250</p>
+          <p class="orbit-hint">Drag to orbit · middle pan · wheel zoom · <span id="volumeNote">Illustrative volume 220 × 220 × 250 mm</span></p>
         </div>
         <div class="stage-actions"><button type="button" class="ghost" id="importBtn">Import STL</button>
         <input type="file" id="stlFile" accept=".stl" hidden />
@@ -491,6 +501,46 @@
     </details>
     </div>
     <div id="printerPane" role="tabpanel" aria-labelledby="tabPrinter" hidden>
+      <details class="printer-setup" id="printerSetup">
+        <summary>Printer setup</summary>
+        <p class="hint">Discover an OctoPrint connection or enter its address. Review settings, then save and select it.</p>
+        <label for="savedPrinter" class="field-label">Saved printers</label>
+        <select id="savedPrinter"><option value="">No saved printers</option></select>
+        <div class="setup-actions"><button type="button" class="ghost" id="selectPrinter">Use selected</button><button type="button" class="ghost" id="editPrinter">Edit</button><button type="button" class="ghost" id="newPrinter">Add manually</button></div>
+        <button type="button" class="ghost wide" id="discoverPrinters">Discover on network</button>
+        <div id="discoveredPrinters" class="notes"></div>
+        <form id="printerConfigForm">
+          <input type="hidden" id="configId" />
+          <label for="configName" class="field-label">Printer name</label><input id="configName" required maxlength="80" placeholder="Workshop printer" />
+          <label for="configUrl" class="field-label">OctoPrint address</label><input id="configUrl" type="url" required placeholder="http://printer.local:5000" />
+          <label for="configKey" class="field-label">API key</label><input id="configKey" type="password" autocomplete="new-password" placeholder="Stored locally; never sent to the model" />
+          <p class="hint">When editing, leave the key blank to keep the stored key.</p>
+          <button type="button" class="ghost" id="testPrinter">Test connection</button>
+          <button type="button" class="ghost" id="useReported" hidden>Use reported settings</button>
+          <label for="configFirmware" class="field-label">Firmware</label><select id="configFirmware"><option value="unknown">Unknown</option><option value="klipper">Klipper</option><option value="marlin">Marlin</option><option value="other">Other</option></select>
+          <p class="hint">OctoPrint is the connection. Confirm firmware and the installed nozzle separately.</p>
+          <div class="setup-dimensions"><label>Width mm<input id="configWidth" type="number" min="1" step="any" /></label><label>Depth mm<input id="configDepth" type="number" min="1" step="any" /></label><label>Height mm<input id="configHeight" type="number" min="1" step="any" /></label></div>
+          <label for="configNozzle" class="field-label">Installed nozzle mm</label><input id="configNozzle" type="number" min="0.1" max="5" step="0.05" />
+          <details><summary>Slicer profile and overlay</summary>
+            <p class="hint">Paths are on the workbench computer. Inspect each file, then review its startup, nozzle and speeds. Any changed file requires a new review and slice.</p>
+            <label for="configProfile" class="field-label">PrusaSlicer profile path</label><input id="configProfile" />
+            <button type="button" class="ghost" data-inspect="profile">Inspect profile</button><output id="profileInspection"></output>
+            <label for="configOverlay" class="field-label">Optional overlay path</label><input id="configOverlay" />
+            <button type="button" class="ghost" data-inspect="overlay">Inspect overlay</button><output id="overlayInspection"></output>
+            <label class="review-check"><input type="checkbox" id="profileReviewed" /> I reviewed these files for this printer, nozzle and startup workflow.</label>
+          </details>
+          <details><summary>Camera and optional host checks</summary>
+            <label for="configSnapshot" class="field-label">Snapshot address</label><input id="configSnapshot" type="url" placeholder="http://camera.local/snapshot.jpg" />
+            <label for="configSsh" class="field-label">SSH config alias (optional)</label><input id="configSsh" placeholder="my-printer-host" />
+            <label for="configService" class="field-label">Camera service name (optional)</label><input id="configService" placeholder="webcamd" />
+            <label for="configRestart" class="field-label">Camera recovery method</label><select id="configRestart"><option value="disabled">Disabled</option><option value="service">sudo service (non-interactive)</option><option value="systemctl">sudo systemctl (non-interactive)</option></select>
+            <label for="configLocalLog" class="field-label">Collected log path on workbench (optional)</label><input id="configLocalLog" />
+            <label for="configLog" class="field-label">Klipper log path on host (optional)</label><input id="configLog" />
+          </details>
+          <button type="submit" class="ghost wide" id="savePrinter">Save and select printer</button>
+        </form>
+        <p class="hint" id="setupStatus" role="status"></p>
+      </details>
       <div class="dash-top">
         <span class="state" id="pState" data-kind="idle">—</span>
         <span class="source" id="pSource">—</span>
@@ -571,7 +621,128 @@
 </div>
 
 <script>
+const setupFields = {name:'configName',base_url:'configUrl',api_key:'configKey',firmware:'configFirmware',profile_path:'configProfile',overlay_path:'configOverlay',snapshot_url:'configSnapshot',ssh_alias:'configSsh',camera_service:'configService',camera_restart:'configRestart',klipper_log:'configLog',local_log:'configLocalLog'};
+let reviewedFiles = {};
+let reportedSettings = {};
+let printerGeneration = 0;
+async function setupRequest(path, body) {
+  const res = await fetch(path, body === undefined ? {} : {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data = await res.json();
+  if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Check the printer settings and try again.');
+  return data;
+}
+function readPrinterSetup() {
+  const data = {id:document.getElementById('configId').value};
+  Object.entries(setupFields).forEach(([key,id]) => data[key] = document.getElementById(id).value.trim());
+  const volume = ['configWidth','configDepth','configHeight'].map(id => document.getElementById(id).value);
+  if (volume.some(Boolean)) {
+    if (!volume.every(Boolean)) throw new Error('Enter all three build-volume dimensions.');
+    data.volume = volume.map(Number);
+  }
+  const nozzle = document.getElementById('configNozzle').value;
+  if (nozzle) data.nozzle = Number(nozzle);
+  const reviewed = document.getElementById('profileReviewed').checked;
+  for (const kind of ['profile','overlay']) {
+    const file = reviewedFiles[kind];
+    data[kind + '_sha256'] = reviewed && file && file.path === data[kind + '_path'] ? file.sha256 : '';
+  }
+  return data;
+}
+async function loadPrinters() {
+  try {
+    const data = await setupRequest('/api/printers');
+    const select = document.getElementById('savedPrinter');
+    select.replaceChildren();
+    data.printers.forEach(printer => {
+      const option = document.createElement('option'); option.value=printer.id; option.textContent=printer.name; select.appendChild(option);
+    });
+    if (!data.printers.length) { const option=document.createElement('option'); option.value=''; option.textContent='No saved printers'; select.appendChild(option); }
+    select.value = data.active_id || '';
+    const editable = Boolean(select.value && select.value !== 'environment');
+    document.getElementById('selectPrinter').disabled = !select.value;
+    document.getElementById('editPrinter').disabled = !editable;
+    if (!data.active_id) document.getElementById('printerSetup').open = true;
+  } catch (_) { document.getElementById('setupStatus').textContent = 'Printer setup unavailable. Try refreshing the page.'; }
+}
+function fillPrinterSetup(data={}) {
+  document.getElementById('printerConfigForm').reset();
+  document.getElementById('configId').value = data.id || '';
+  Object.entries(setupFields).forEach(([key,id]) => { if (data[key] != null) document.getElementById(id).value = data[key]; });
+  (data.volume || []).forEach((value,index) => document.getElementById(['configWidth','configDepth','configHeight'][index]).value=value);
+  document.getElementById('configNozzle').value = data.nozzle || '';
+  document.getElementById('configKey').value = '';
+  reviewedFiles = {}; reportedSettings = {};
+  document.getElementById('profileInspection').textContent=''; document.getElementById('overlayInspection').textContent='';
+  document.getElementById('useReported').hidden=true;
+  document.getElementById('printerSetup').open=true;
+}
+async function setupAction(action) {
+  try { await action(); } catch (err) { document.getElementById('setupStatus').textContent=err.message || 'Printer setup failed.'; }
+}
+document.getElementById('newPrinter').onclick=()=>fillPrinterSetup();
+document.getElementById('savedPrinter').onchange=()=>{
+  const editable=Boolean(document.getElementById('savedPrinter').value && document.getElementById('savedPrinter').value!=='environment');
+  document.getElementById('selectPrinter').disabled=!document.getElementById('savedPrinter').value; document.getElementById('editPrinter').disabled=!editable;
+};
+document.getElementById('editPrinter').onclick=()=>setupAction(async()=>fillPrinterSetup(await setupRequest('/api/printers/'+encodeURIComponent(document.getElementById('savedPrinter').value)+'/setup')));
+document.getElementById('selectPrinter').onclick=()=>setupAction(async()=>{
+  resetPrinterPresentation();
+  await setupRequest('/api/printers/select',{printer_id:document.getElementById('savedPrinter').value});
+  preparation={}; printerIdle=false; await pollPrinter(); await refreshCamera(); await loadPrinters();
+  document.getElementById('setupStatus').textContent='Printer selected. Slice again for this printer.';
+});
+document.getElementById('testPrinter').onclick=()=>setupAction(async()=>{
+  const button=document.getElementById('testPrinter');button.disabled=true;
+  try {
+    const data=await setupRequest('/api/printers/probe',readPrinterSetup());
+    reportedSettings=data.suggested || {};
+    document.getElementById('setupStatus').textContent=data.message;
+    document.getElementById('useReported').hidden=!Object.keys(reportedSettings).length;
+  } finally {button.disabled=false;}
+});
+document.getElementById('useReported').onclick=()=>{
+  if (reportedSettings.volume) reportedSettings.volume.forEach((n,i)=>document.getElementById(['configWidth','configDepth','configHeight'][i]).value=n);
+  if (reportedSettings.nozzle) document.getElementById('configNozzle').value=reportedSettings.nozzle;
+  if (reportedSettings.snapshot_url) document.getElementById('configSnapshot').value=reportedSettings.snapshot_url;
+  document.getElementById('setupStatus').textContent='Reported settings copied. Confirm the physical nozzle and volume before saving.';
+};
+document.querySelectorAll('[data-inspect]').forEach(button=>button.onclick=()=>setupAction(async()=>{
+  const kind=button.dataset.inspect; const path=document.getElementById(kind==='profile'?'configProfile':'configOverlay').value.trim();
+  const data=await setupRequest('/api/printers/profile/inspect',{path});
+  reviewedFiles[kind]={path,sha256:data.sha256};
+  document.getElementById(kind+'Inspection').textContent=Object.entries(data.settings).map(([k,v])=>k+': '+v).join(' · ')+' · SHA-256 '+data.sha256;
+  document.getElementById('profileReviewed').checked=false;
+}));
+for (const id of ['configProfile','configOverlay']) document.getElementById(id).addEventListener('input',()=>document.getElementById('profileReviewed').checked=false);
+document.getElementById('printerConfigForm').onsubmit=event=>{
+  event.preventDefault();setupAction(async()=>{
+    const button=document.getElementById('savePrinter');button.disabled=true;
+    try {
+      resetPrinterPresentation();
+      const saved=await setupRequest('/api/printers',readPrinterSetup());
+      await setupRequest('/api/printers/select',{printer_id:saved.id});
+      document.getElementById('configId').value=saved.id;document.getElementById('configKey').value='';
+      preparation={};printerIdle=false;await pollPrinter();await refreshCamera();await loadPrinters();
+      document.getElementById('setupStatus').textContent='Saved and selected. Connection details stay on this workbench.';
+    } finally {button.disabled=false;}
+  });
+};
+document.getElementById('discoverPrinters').onclick=()=>setupAction(async()=>{
+  const button=document.getElementById('discoverPrinters');button.disabled=true;
+  document.getElementById('setupStatus').textContent='Looking for advertised OctoPrint printers…';
+  try {
+    const data=await setupRequest('/api/printers/discover',{});
+    const list=document.getElementById('discoveredPrinters');list.replaceChildren();
+    data.candidates.forEach(candidate=>{
+      const choose=document.createElement('button');choose.type='button';choose.className='ghost';choose.textContent=candidate.name;
+      choose.onclick=()=>{fillPrinterSetup(candidate);document.getElementById('setupStatus').textContent='Discovered address filled in. Test and review before saving.';};list.appendChild(choose);
+    });
+    document.getElementById('setupStatus').textContent=data.message;
+  } finally {button.disabled=false;}
+});
+loadPrinters();
 const BED = { x: 220, y: 220, z: 250 };
+let volumeConfirmed = false;
 const FIXTURE = '/fixtures/pocket-caliclaw.stl';
 const input = document.getElementById('input');
 const thread = document.getElementById('thread');
@@ -624,11 +795,13 @@ function tempReadout(block, flat) {
 const cam = document.getElementById('cam');
 const camNote = document.getElementById('camNote');
 let camBusy = false;
+let cameraGeneration = 0;
 let cameraFailed = false;
 let printerIdle = false;
+let cameraRecoveryConfigured = false;
 function updateCameraRecovery() {
   const button = document.getElementById('cameraRestart');
-  button.hidden = !cameraFailed;
+  button.hidden = !cameraFailed || !cameraRecoveryConfigured;
   button.disabled = !printerIdle;
   button.title = printerIdle ? 'Restart only the camera service.' : 'Requires a known-idle live printer.';
 }
@@ -641,7 +814,17 @@ cam.addEventListener('error', () => {
   camNote.textContent = 'Snapshot unavailable.';
 });
 
+function resetPrinterPresentation() {
+  printerGeneration += 1; cameraGeneration += 1;
+  printerIdle = false; selectedPrinterIdentity = ''; preparation = {};
+  cam.hidden = true; cam.removeAttribute('src');
+  camNote.hidden = false; camNote.textContent = 'Loading selected printer camera…';
+  if (camUrl) { URL.revokeObjectURL(camUrl); camUrl=''; }
+  for (const id of ['toolTarget','bedTarget','feedTarget','flowTarget']) { const field=document.getElementById(id);field.value='';field.dataset.dirty=''; }
+  for (const id of ['startBtn','pauseBtn','cancelBtn','uploadBtn','toolBtn','bedBtn','feedBtn','flowBtn']) document.getElementById(id).disabled=true;
+}
 async function refreshCamera() {
+  const generation = cameraGeneration;
   if (camBusy) return;
   camBusy = true;
   try {
@@ -651,6 +834,7 @@ async function refreshCamera() {
       throw new Error('unavailable');
     }
     const blob = await res.blob();
+    if (generation !== cameraGeneration) return;
     if (camUrl) URL.revokeObjectURL(camUrl);
     camUrl = URL.createObjectURL(blob);
     cam.src = camUrl;
@@ -658,6 +842,7 @@ async function refreshCamera() {
     camNote.hidden = true;
     cameraFailed = false;
   } catch (err) {
+    if (generation !== cameraGeneration) return;
     cam.hidden = true;
     if (camUrl) {
       URL.revokeObjectURL(camUrl);
@@ -667,8 +852,10 @@ async function refreshCamera() {
     camNote.hidden = false;
     camNote.textContent = 'Snapshot unavailable.';
   } finally {
-    cameraFailed = !camNote.hidden;
-    updateCameraRecovery();
+    if (generation === cameraGeneration) {
+      cameraFailed = !camNote.hidden;
+      updateCameraRecovery();
+    }
     camBusy = false;
   }
 }
@@ -704,6 +891,7 @@ function targetNumber(block, flat) {
 }
 
 let resumeMode = false;
+let selectedPrinterIdentity = "";
 let preparation = {};
 async function refreshPreparation() {
   try {
@@ -716,12 +904,19 @@ async function refreshPreparation() {
   document.getElementById('startBtn').disabled = !printerIdle || !preparation.uploaded;
 }
 async function pollPrinter() {
+  const generation = printerGeneration;
   try {
     const res = await fetch('/api/printer');
     if (!res.ok) throw new Error('Printer status unavailable.');
     const data = await res.json();
+    if (generation !== printerGeneration) return;
+    selectedPrinterIdentity = data.printer_id || "";
     const simulated = Boolean(data.simulated) || String(data.source || '').indexOf('simulated') === 0;
+    const volume = data.printer && data.printer.volume;
+    if (window.setBuildVolume) window.setBuildVolume(volume);
+    else if (volume) { [BED.x,BED.y,BED.z]=volume; volumeConfirmed=true; }
     const state = data.state || '—';
+    cameraRecoveryConfigured = Boolean(data.printer && data.printer.has_camera_recovery);
     const flags = data.flags || {};
     printerIdle = !simulated && data.source === 'octoprint' && /^(operational|ready|idle)$/i.test(state) && flags.operational === true && !['printing','paused','pausing','cancelling','finishing','error','closedOrError'].some(key => flags[key]);
     updateCameraRecovery();
@@ -729,7 +924,7 @@ async function pollPrinter() {
     paintState(document.getElementById('pState'), state, kind);
     paintState(document.getElementById('stageState'), state, kind);
     const sourceEl = document.getElementById('pSource');
-    sourceEl.textContent = simulated ? 'Simulated' : 'OctoPrint';
+    sourceEl.textContent = (data.printer ? data.printer.name + ' · ' : '') + (simulated ? 'Simulated' : 'OctoPrint');
     sourceEl.title = simulated ? 'OctoPrint did not answer. This panel is not the machine.' : 'Live OctoPrint';
 
     let frac = null;
@@ -769,7 +964,9 @@ async function pollPrinter() {
     document.getElementById('simulateBtn').hidden = !simulated;
     await refreshPreparation();
   } catch (err) {
+    if (generation !== printerGeneration) return;
     printerIdle = false;
+    selectedPrinterIdentity = "";
     updateCameraRecovery();
     for (const id of ['startBtn', 'pauseBtn', 'cancelBtn', 'uploadBtn', 'toolTarget', 'toolBtn', 'bedTarget', 'bedBtn', 'feedTarget', 'feedBtn', 'flowTarget', 'flowBtn']) document.getElementById(id).disabled = true;
     paintState(document.getElementById('pState'), 'Unavailable', 'bad');
@@ -799,7 +996,7 @@ document.getElementById('cameraRestart').onclick = async () => {
   const button = document.getElementById('cameraRestart');
   button.disabled = true;
   try {
-    const res = await fetch('/api/camera/restart', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({confirm: true}) });
+    const res = await fetch('/api/camera/restart', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({confirm: true,printer_id:selectedPrinterIdentity}) });
     const data = await res.json();
     if (!res.ok) throw new Error(safeDetail(data, 'Camera recovery unavailable.'));
     await refreshCamera();
@@ -836,6 +1033,7 @@ function note(text) {
 }
 
 async function postSetting(url, body, inputId, okText) {
+  body.printer_id = selectedPrinterIdentity;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -898,6 +1096,7 @@ document.getElementById('flowBtn').onclick = () => {
 };
 
 async function postControl(url, body) {
+  body = {...(body || {}), printer_id:selectedPrinterIdentity};
   const res = await fetch(url, {
     method: 'POST',
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
@@ -909,11 +1108,11 @@ async function postControl(url, body) {
 }
 
 document.getElementById('startBtn').onclick = () => {
-  if (!preparation.uploaded || !confirm('Start ' + preparation.filename + ' on the printer?')) return;
+  if (!preparation.uploaded || !confirm('Start ' + preparation.filename + ' on ' + (document.getElementById('pSource').textContent || 'the selected printer') + '? Verify the bed is clear and the printer startup preparation is complete.')) return;
   postControl('/api/printer/start', { confirm: true, filename: preparation.filename, slice_id: preparation.slice_id });
 };
 document.getElementById('cancelBtn').onclick = () => {
-  if (!confirm('Cancel the print on the printer?')) return;
+  if (!confirm('Cancel the print on ' + document.getElementById('pSource').textContent + '?')) return;
   postControl('/api/printer/cancel', { confirm: true });
 };
 document.getElementById('pauseBtn').onclick = () => {
@@ -1270,8 +1469,9 @@ async function bootViewer() {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     return new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color, transparent: true, opacity }));
   }
-  scene.add(gridLines(10, 0xf4f4f4, 0.8));
-  scene.add(gridLines(100, 0xffffff, 1));
+  const fineGrid = gridLines(10, 0xf4f4f4, 0.8);
+  const coarseGrid = gridLines(100, 0xffffff, 1);
+  scene.add(fineGrid, coarseGrid);
 
   const volume = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.BoxGeometry(BED.x, BED.z, BED.y)),
@@ -1279,6 +1479,22 @@ async function bootViewer() {
   );
   volume.position.y = BED.z / 2;
   scene.add(volume);
+  window.setBuildVolume = (dimensions) => {
+    const next = dimensions || [220,220,250];
+    document.getElementById('volumeNote').textContent = (dimensions ? 'Configured volume ' : 'Illustrative volume ') + next.join(' × ') + ' mm';
+    if ([BED.x,BED.y,BED.z].every((n,i)=>n===next[i])) return;
+    [BED.x,BED.y,BED.z] = next;
+    plate.geometry.dispose(); plate.geometry = new THREE.BoxGeometry(BED.x,6,BED.y);
+    volume.geometry.dispose(); volume.geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(BED.x,BED.z,BED.y)); volume.position.y=BED.z/2;
+    for (const [grid,step,color,opacity] of [[fineGrid,10,0xf4f4f4,0.8],[coarseGrid,100,0xffffff,1]]) {
+      grid.geometry.dispose(); grid.geometry=gridLines(step,color,opacity).geometry;
+    }
+    const scale = Math.max(...next) / 250;
+    camera.far = Math.max(4000, Math.max(...next)*8); camera.updateProjectionMatrix();
+    controls.maxDistance = Math.max(900, Math.max(...next)*4);
+    camera.position.set(460*scale,380*scale,460*scale); controls.target.set(0,BED.z*.32,0); controls.update();
+  };
+  document.getElementById('volumeNote').textContent = (volumeConfirmed ? 'Configured volume ' : 'Illustrative volume ') + [BED.x,BED.y,BED.z].join(' × ') + ' mm';
 
   const material = new THREE.MeshStandardMaterial({
     color: 0xd6453a,
